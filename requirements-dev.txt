@@ -1,0 +1,7 @@
+-r api/requirements.txt
+-r worker/requirements.txt
+-r llm_gateway/requirements.txt
+pytest==8.3.4
+httpx==0.28.1
+fakeredis==2.26.2
+ruff==0.8.4
