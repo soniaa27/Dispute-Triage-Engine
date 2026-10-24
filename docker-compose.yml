@@ -1,0 +1,85 @@
+# Start everything:     cp .env.example .env && docker compose up --build
+# Scale the workers:    docker compose up -d --scale worker=3
+# All configuration comes from .env (see .env.example); nothing is hardcoded here.
+
+x-python-healthcheck: &py-healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 15s
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  llm-gateway:
+    build:
+      context: .
+      dockerfile: llm_gateway/Dockerfile
+    env_file: .env
+    expose:
+      - "8100"
+    healthcheck:
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=3)"]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    env_file: .env
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=3)"]
+    restart: unless-stopped
+
+  # Scalable: no container_name and no host ports, so `--scale worker=N` works.
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
+      # The API creates the tables at startup; workers wait for it.
+      api:
+        condition: service_healthy
+    healthcheck:
+      <<: *py-healthcheck
+      test: ["CMD", "python", "-m", "worker.healthcheck"]
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
