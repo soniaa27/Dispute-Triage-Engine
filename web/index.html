@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dispute Triage</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 1.5rem auto; padding: 0 1rem; }
+    fieldset { margin-bottom: 1rem; }
+    label { display: block; margin: .4rem 0; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: .3rem; }
+    textarea { min-height: 6rem; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+    .claims label { display: inline-block; margin-right: 1rem; width: auto; }
+    .claims select { width: auto; }
+    pre { background: #f4f4f4; padding: .6rem; overflow-x: auto; white-space: pre-wrap; }
+    .error { color: #a00; }
+    .escalated { color: #a60; font-weight: bold; }
+    blockquote { margin: .3rem 0 .8rem; padding-left: .8rem; border-left: 3px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Card Dispute Triage</h1>
+  <p>Submits a dispute and shows the recommendation. The system never issues a credit; an analyst decides.</p>
+
+  <form id="dispute-form">
+    <fieldset>
+      <legend>Dispute</legend>
+      <div class="row">
+        <label>Customer ID <input name="customer_id" value="CUST-000123" required></label>
+        <label>Transaction ID <input name="transaction_id" value="TXN-2026-000001" required></label>
+        <label>Account type
+          <select name="account_type">
+            <option>BSBD</option><option selected>SAVINGS</option><option>CURRENT_MSME</option>
+            <option>CURRENT_INDIVIDUAL_UPTO_25L</option><option>CURRENT_OTHER</option>
+            <option>CREDIT_CARD_UPTO_5L</option><option>CREDIT_CARD_ABOVE_5L</option><option>PREPAID</option>
+          </select>
+        </label>
+        <label>Channel
+          <select name="channel">
+            <option>CARD_PRESENT</option><option selected>CARD_NOT_PRESENT</option><option>UPI</option>
+            <option>NET_BANKING</option><option>MOBILE_BANKING</option><option>ATM</option>
+          </select>
+        </label>
+        <label>Amount (INR) <input name="transaction_amount_inr" type="number" step="0.01" value="4999"></label>
+        <label>Home branch state <input name="home_branch_state" value="Karnataka"></label>
+        <label>Transaction time <input name="transaction_datetime" type="datetime-local" required></label>
+        <label>Bank alert time (optional) <input name="bank_alert_datetime" type="datetime-local"></label>
+        <label>Reported time <input name="reported_datetime" type="datetime-local" required></label>
+      </div>
+      <label>Complaint
+        <textarea name="complaint_text">An online purchase I did not make appeared on my card statement.</textarea>
+      </label>
+      <div class="claims">
+        Customer claims:
+        <label>Shared OTP/PIN <select name="shared_otp_or_pin"><option value="">not stated</option><option>true</option><option>false</option></select></label>
+        <label>Card in possession <select name="card_in_possession"><option value="">not stated</option><option>true</option><option>false</option></select></label>
+        <label>Received alert <select name="received_alert"><option value="">not stated</option><option>true</option><option>false</option></select></label>
+      </div>
+    </fieldset>
+    <button type="submit">Submit dispute</button>
+  </form>
+
+  <h2>Result</h2>
+  <div id="status">No run yet.</div>
+  <div id="result"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
