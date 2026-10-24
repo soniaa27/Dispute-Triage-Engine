@@ -1,0 +1,26 @@
+# Secrets / local config
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Local databases from ad-hoc runs
+*.db
+*.sqlite3
+
+# Build outputs: vector index, embeddings cache, eval reports.
+# Corpus PDFs in corpus/raw/ ARE committed (they are versioned inputs).
+data/
+eval/reports/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

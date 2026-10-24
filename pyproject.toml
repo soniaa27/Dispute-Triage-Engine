@@ -1,0 +1,22 @@
+# Tool configuration only. Runtime dependencies are pinned per service in
+# <service>/requirements.txt; dev tooling in requirements-dev.txt.
+[project]
+name = "card-dispute-triage"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["contracts", "common", "api", "worker", "agent", "ingest", "eval", "llm_gateway"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
