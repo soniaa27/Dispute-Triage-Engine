@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "AccountType": {
+      "description": "Account categories, aligned with the RBI circular's liability caps table.",
+      "enum": [
+        "BSBD",
+        "SAVINGS",
+        "CURRENT_MSME",
+        "CURRENT_INDIVIDUAL_UPTO_25L",
+        "CURRENT_OTHER",
+        "CREDIT_CARD_UPTO_5L",
+        "CREDIT_CARD_ABOVE_5L",
+        "PREPAID"
+      ],
+      "title": "AccountType",
+      "type": "string"
+    },
+    "Channel": {
+      "enum": [
+        "CARD_PRESENT",
+        "CARD_NOT_PRESENT",
+        "UPI",
+        "NET_BANKING",
+        "MOBILE_BANKING",
+        "ATM"
+      ],
+      "title": "Channel",
+      "type": "string"
+    },
+    "CustomerClaims": {
+      "additionalProperties": false,
+      "description": "What the customer asserts. Each is optional: null means 'not stated'.",
+      "properties": {
+        "shared_otp_or_pin": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Shared Otp Or Pin"
+        },
+        "card_in_possession": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Card In Possession"
+        },
+        "received_alert": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Received Alert"
+        }
+      },
+      "title": "CustomerClaims",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A customer's report of an unauthorised card / UPI transaction.\n\nAll datetimes must carry a timezone offset (e.g. +05:30) so reporting delays are unambiguous.",
+  "examples": [
+    {
+      "account_type": "SAVINGS",
+      "bank_alert_datetime": "2026-09-01T14:06:00+05:30",
+      "channel": "CARD_NOT_PRESENT",
+      "complaint_text": "An online purchase I did not make appeared on my card.",
+      "customer_claims": {
+        "card_in_possession": true,
+        "received_alert": true,
+        "shared_otp_or_pin": false
+      },
+      "customer_id": "CUST-000123",
+      "home_branch_state": "Karnataka",
+      "reported_datetime": "2026-09-02T10:00:00+05:30",
+      "transaction_amount_inr": 4999.0,
+      "transaction_datetime": "2026-09-01T14:05:00+05:30",
+      "transaction_id": "TXN-2026-000001"
+    }
+  ],
+  "properties": {
+    "customer_id": {
+      "description": "Bank customer identifier (synthetic).",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Customer Id",
+      "type": "string"
+    },
+    "account_type": {
+      "$ref": "#/$defs/AccountType"
+    },
+    "channel": {
+      "$ref": "#/$defs/Channel"
+    },
+    "transaction_id": {
+      "maxLength": 64,
+      "minLength": 4,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+      "title": "Transaction Id",
+      "type": "string"
+    },
+    "transaction_amount_inr": {
+      "description": "Disputed amount in INR; > 0 and <= 1,00,00,000.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 10000000.0,
+      "title": "Transaction Amount Inr",
+      "type": "number"
+    },
+    "transaction_datetime": {
+      "format": "date-time",
+      "title": "Transaction Datetime",
+      "type": "string"
+    },
+    "bank_alert_datetime": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the bank's SMS/email alert for the transaction was sent.",
+      "title": "Bank Alert Datetime"
+    },
+    "reported_datetime": {
+      "description": "When the customer reported the transaction to the bank.",
+      "format": "date-time",
+      "title": "Reported Datetime",
+      "type": "string"
+    },
+    "home_branch_state": {
+      "description": "State/UT of the home branch; used for the working-day calendar.",
+      "maxLength": 50,
+      "minLength": 2,
+      "pattern": "^[A-Za-z][A-Za-z .&-]*$",
+      "title": "Home Branch State",
+      "type": "string"
+    },
+    "complaint_text": {
+      "maxLength": 4000,
+      "minLength": 10,
+      "title": "Complaint Text",
+      "type": "string"
+    },
+    "customer_claims": {
+      "$ref": "#/$defs/CustomerClaims"
+    }
+  },
+  "required": [
+    "customer_id",
+    "account_type",
+    "channel",
+    "transaction_id",
+    "transaction_amount_inr",
+    "transaction_datetime",
+    "reported_datetime",
+    "home_branch_state",
+    "complaint_text"
+  ],
+  "title": "DisputeRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from contracts/dispute.py by `make schema`. Do not edit by hand. Cross-field rules (enforced server-side, not expressible here): reported_datetime >= transaction_datetime; bank_alert_datetime >= transaction_datetime; no datetime in the future (5 min skew tolerated); customer_claims.card_in_possession must be null when channel is UPI."
+}
