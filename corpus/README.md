@@ -14,12 +14,10 @@ The RBI circular page (1) is HTML; download the PDF linked from that page.
 
 ## Provenance
 
-Fill this in after downloading. Get the hashes with `python scripts/hash_corpus.py`.
-
 | doc_id | Filename (in `corpus/raw/`) | Download date | SHA-256 | Text layer? (y/n, OCR needed?) |
 |--------|-----------------------------|---------------|---------|--------------------------------|
-| RBI_2017_CIRCULAR | | | | |
-| IDBI_POLICY | | | | |
-| RBI_IOS_2026 | | | | |
+| RBI_2017_CIRCULAR | RBI customer protection.pdf | 2026-10-24 | 630f68e6f25a8cdcf942c1e20b73b0c807b1690b053684b1e8b61b23f64b0e | Verify |
+| IDBI_POLICY | Unauthorized transactions policy.pdf | 2026-10-24 | c76aa964ededcf8dede1ed9802297e737a5209442647ef237570226d113712cd | Verify |
+| RBI_IOS_2026 | Ombudsman Scheme.pdf | 2026-10-24 | f119574982a073819d2286c3d016ef10e1fbeebed8e23864e40e885d950901b6 | Verify |
 
 `doc_id` is the identifier used in `Citation.doc_id`.
