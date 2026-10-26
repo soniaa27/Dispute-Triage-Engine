@@ -7,16 +7,21 @@ Build outputs (vector index, embedding cache) go to `data/`, which is git-ignore
 | # | Document | Publisher | Source URL |
 |---|----------|-----------|------------|
 | 1 | Customer Protection – Limiting Liability of Customers in Unauthorised Electronic Banking Transactions (6 July 2017) | Reserve Bank of India | https://www.rbi.org.in/scripts/FS_Notification.aspx?Id=11040 |
-| 2 | Policy on Unauthorized Electronic Banking Transactions (27 Sept 2024) | IDBI Bank | https://www.idbibank.in/pdf/policy/Unauthorised-Electronic-Banking-Transactions-Policy.pdf |
+| 2 | Policy on Unauthorized Electronic Banking Transactions (25 September 2025) | IDBI Bank | https://www.idbibank.in/pdf/policy/Unauthorised-Electronic-Banking-Transactions-Policy.pdf |
 | 3 | Reserve Bank – Integrated Ombudsman Scheme, 2026 | Reserve Bank of India | https://rbidocs.rbi.org.in/rdocs/content/pdfs/SCHEME16012026_A.pdf |
 
 The RBI circular page (1) is HTML; download the PDF linked from that page.
+
+The dates above are the dates printed on the files in `corpus/raw/` (the IDBI cover page reads
+"September 25, 2025"). The IDBI URL serves whichever version is current, so check the cover
+date and SHA-256 below before rebuilding the index from a fresh download. Facts used in
+evaluation scenarios must be checked against these exact files.
 
 ## Provenance
 
 | doc_id | Filename (in `corpus/raw/`) | Download date | SHA-256 | Text layer? (y/n, OCR needed?) |
 |--------|-----------------------------|---------------|---------|--------------------------------|
-| RBI_2017_CIRCULAR | RBI customer protection.pdf | 2026-10-24 | 630f68e6f25a8cdcf942c1e20b73b0c807b1690b053684b1e8b61b23f64b0e | Verify |
+| RBI_2017_CIRCULAR | RBI customer protection.pdf | 2026-10-24 | 630f68e6f25a8cdcfe942c1e20b73b0c807b1690b0536b84b1e8b61b23f64b0e | Verify |
 | IDBI_POLICY | Unauthorized transactions policy.pdf | 2026-10-24 | c76aa964ededcf8dede1ed9802297e737a5209442647ef237570226d113712cd | Verify |
 | RBI_IOS_2026 | Ombudsman Scheme.pdf | 2026-10-24 | f119574982a073819d2286c3d016ef10e1fbeebed8e23864e40e885d950901b6 | Verify |
 
