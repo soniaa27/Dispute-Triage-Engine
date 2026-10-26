@@ -123,7 +123,8 @@ class AgentLimits(BaseSettings):
 
     max_steps: int = Field(default=12, ge=1)
     max_tool_calls: int = Field(default=20, ge=1)
-    max_wall_clock_seconds: float = Field(default=90, gt=0)
+    # Below RUN_TIMEOUT_SECONDS (90) so the agent escalates before the worker's hard kill.
+    max_wall_clock_seconds: float = Field(default=75, gt=0)
 
 
 _LIMIT_FIELDS = ("max_steps", "max_tool_calls", "max_wall_clock_seconds")

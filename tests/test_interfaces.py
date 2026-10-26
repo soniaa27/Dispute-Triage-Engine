@@ -120,7 +120,10 @@ def test_agent_state_defaults_and_explicit_limits(monkeypatch, payload):
     for name in ("AGENT_MAX_STEPS", "AGENT_MAX_TOOL_CALLS", "AGENT_MAX_WALL_CLOCK_SECONDS"):
         monkeypatch.delenv(name, raising=False)
     req = DisputeRequest.model_validate(payload)
-    assert AgentState(request=req, run_id="r").max_steps == 12
+    defaults = AgentState(request=req, run_id="r")
+    assert (defaults.max_steps, defaults.max_tool_calls, defaults.max_wall_clock_seconds) == (
+        12, 20, 75
+    )
     assert AgentState(request=req, run_id="r", max_steps=3).max_steps == 3
 
 
