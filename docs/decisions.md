@@ -70,3 +70,37 @@ Short records of decisions and what was rejected. Add new entries at the bottom.
 
 - `common/` holds logging setup and the SQLAlchemy models used by both api and worker.
   Each image copies only what it needs (the gateway copies only `common/logging.py`).
+
+## D-008 Retriever and LLM client are `typing.Protocol`s (rejected: ABCs, concrete classes)
+
+- `contracts/tools.py: Retriever` and `contracts/llm.py: LLMClient` define only method
+  signatures. Agents type against them and receive an instance, so:
+  - Person 1 can build the FAISS/Chroma retriever and Person 2 the Verifier at the same
+    time, against the same signatures.
+  - The provider can be changed by configuration (the brief's section 12) without
+    touching agent code.
+  - Tests can pass any object with the right methods; no inheritance needed.
+- **Rejected: abstract base classes.** They force implementations to import and subclass
+  our package and add nothing that the type checker and `runtime_checkable` don't give.
+- **Rejected: calling LangChain/LlamaIndex or a provider SDK directly from the agents.**
+  That ties agent code to one library and makes the circuit breaker and cost accounting
+  impossible to enforce in one place.
+
+## D-009 Working days are computed in code, not by the LLM
+
+- The reporting delay picks the row of the liability table (within 3 / 4 to 7 / beyond 7
+  working days), so an off-by-one changes the outcome. It must be exact, reproducible and
+  testable, which a language model is not. `contracts.tools.compute_working_days` is
+  deterministic and unit-tested. Both agents call it; the Verifier recomputes it rather
+  than trusting the Investigator's number.
+- **Counting rule:** days after the communication date up to and including the reporting
+  date. Sundays and 2nd/4th Saturdays are non-working, plus holidays passed in.
+- **Known conflict in the corpus.** The RBI circular's note under Table 2 excludes "the date
+  of receiving the communication". IDBI policy 5.13 says the count is made "without
+  considering the date of reporting". We follow the RBI note, because the circular is the
+  governing regulation and the IDBI tables count "from the date of receipt of
+  communication". The difference matters only at the 3- and 7-day boundaries. When the
+  delay lands exactly on a boundary, the Verifier should treat it as
+  `conflicting_provisions` and escalate.
+- **Not yet done:** state bank-holiday calendars by `home_branch_state`. Until then,
+  holidays must be passed in explicitly.
