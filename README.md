@@ -117,6 +117,9 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | Path | Contents | Owner |
 |------|----------|-------|
 | `contracts/` | Pydantic data contracts (source of truth) + generated JSON Schema | shared |
+| `contracts/agent.py` | Agent hand-offs: `Passage`, `InvestigatorOutput`, `VerifierOutput`, `AgentState`, `DocId` | shared |
+| `contracts/llm.py` | `LLMClient` protocol, `LLMResponse`, `LLMUnavailableError` | shared |
+| `contracts/tools.py` | `Retriever` protocol and `compute_working_days` | shared |
 | `common/` | JSON logging and SQLAlchemy models used by api and worker | Person B |
 | `api/` | FastAPI app: ingestion, quarantine, runs, feedback, health, metrics | Person B |
 | `worker/` | RQ worker: status transitions, timeout, failure handling | Person B |
@@ -145,6 +148,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 
 - [Architecture](docs/architecture.md)
 - [Design decisions](docs/decisions.md)
+- [Agent interfaces and clause ID conventions](docs/interfaces.md)
 - [Runbook](docs/runbook.md)
 - [Incident log](docs/incident_log.md)
 - [Corpus sources](corpus/README.md)
