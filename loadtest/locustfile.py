@@ -3,7 +3,7 @@
     locust -f loadtest/locustfile.py --host http://localhost:8000
 
 TODO: declare the p95 SLO in docs/decisions.md BEFORE running; measure submission ->
-terminal status (not just the POST); run with LLM_MODE=stub.
+terminal status (not just the POST); run with LLM_PROVIDER=stub.
 """
 
 import time

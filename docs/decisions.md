@@ -136,3 +136,50 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
 - **Liability value `undetermined`** marks escalations the corpus cannot settle (conflicts,
   boundaries), as distinct from `not_applicable` (out of scope).
 - **Not modelled:** state bank holidays and the RBI paragraph 9 discretionary waiver.
+
+## D-012 Gemini through google-genai, behind a provider abstraction
+
+- **SDK:** the official `google-genai` SDK (not the deprecated `google-generativeai`, not raw
+  REST). It reports token usage per response, including thinking tokens, and raises typed
+  `APIError`s with the HTTP code, which map cleanly onto retryable and non-retryable errors.
+- **Pinned to 2.8.0:** later releases require pydantic ≥ 2.12.5, while every service pins
+  pydantic 2.10.4. Bumping pydantic across the contracts was out of scope for this branch.
+- **SDK retries off:** the SDK's own retries are disabled (`HttpRetryOptions(attempts=1)`),
+  so the gateway's retry count, breaker and rate limiter see every real request.
+- **Provider abstraction:** `llm_gateway/providers/` holds a `Provider` protocol, one file per
+  provider and a registry keyed by `LLM_PROVIDER`. Switching provider is configuration only;
+  adding one is one file plus one registry entry. Agents never see a provider SDK; they use
+  `LLMClient` (D-008).
+- **Stub kept:** the stub stays as a provider, because load tests need a model-free gateway.
+
+## D-013 Breaker and rate-limiter state in Redis, not in process memory
+
+- **In memory would fail twice:**
+  - Restarting the gateway would reset an open breaker, so a restart during a provider outage
+    would immediately send traffic to the failing provider again.
+  - With more than one gateway replica, each would have its own breaker and its own request
+    budget, so N replicas would send N times the configured rate to a free-tier quota.
+- **Chosen:** Redis, already in the stack for RQ.
+  - The breaker is a hash plus a `SET NX EX` trial lock, so exactly one caller makes the
+    half-open trial.
+  - The limiter is a token bucket in one Lua script, so it is atomic across replicas.
+- **Cost:** a few sub-millisecond Redis round trips per call, which is negligible next to an
+  LLM call. If Redis is down the gateway cannot serve. The API and worker cannot either, so
+  this adds no new failure mode.
+- **Not distributed-perfect:** breaker transitions are not one transaction. Two replicas
+  failing at the same moment may both record the opening; the outcome (open) is the same.
+
+## D-014 Cost computed at call time
+
+- **How:** the gateway computes `cost_usd` from the provider's reported token counts and the
+  configured prices (`LLM_PRICE_PER_1K_*`) when the call completes. It stores the cost in
+  `llm_calls` and returns it in `LLMResponse`.
+- **Why at call time:**
+  - Prices change. A row records what the call cost under the price in force then, so
+    old reports stay correct after a price change.
+  - Retrospective computation would need the price history.
+  - Per-run cost is available immediately to the agent, the eval report and the metrics,
+    with no batch job.
+- **Tokens are stored too,** so cost can be recomputed under a different price for
+  what-if analysis. On the free tier the prices are 0; tokens are the cost measure, and the
+  cost report falls back to tokens to find the largest driver.

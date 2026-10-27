@@ -27,7 +27,22 @@ def _add_service(service: str):
     return processor
 
 
-def configure_logging(service: str, level: str = "INFO") -> None:
+def _redact(secrets: tuple[str, ...]):
+    """Replace any secret value in rendered fields (runs after exceptions are formatted)."""
+
+    def processor(_logger, _method, event_dict):
+        for key, value in event_dict.items():
+            if isinstance(value, str):
+                for secret in secrets:
+                    value = value.replace(secret, "[REDACTED]")
+                event_dict[key] = value
+        return event_dict
+
+    return processor
+
+
+def configure_logging(service: str, level: str = "INFO", redact: tuple[str, ...] = ()) -> None:
+    """`redact`: secret values (e.g. an API key) that must never appear in a log line."""
     shared = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
@@ -47,6 +62,7 @@ def configure_logging(service: str, level: str = "INFO") -> None:
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
             structlog.processors.format_exc_info,
+            _redact(tuple(s for s in redact if s)),
             structlog.processors.JSONRenderer(),
         ],
     )

@@ -4,6 +4,8 @@
 pytest==8.3.4
 httpx==0.28.1
 fakeredis==2.26.2
+# Lua for fakeredis (the gateway's rate limiter is a Redis Lua script)
+lupa==2.8
 ruff==0.8.4
 # Evaluation: PDF text for verbatim checks (the IDBI PDF is AES-encrypted -> cryptography)
 pypdf==5.1.0
