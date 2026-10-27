@@ -48,11 +48,27 @@ class PageText:
     page: int  # 1-based PDF page index, not the number printed on the page
     text: str  # layout text keeps column spacing; use squash_whitespace() for prose
     mode: Literal["layout", "plain"]
+    plain: str  # unrepaired plain-mode text: what eval/corpus.py calls verbatim
 
 
 def _chars(text: str) -> Counter[str]:
     """Characters of `text` ignoring whitespace, for the layout-vs-plain check."""
     return Counter(_WHITESPACE.sub("", unicodedata.normalize("NFKC", text)))
+
+
+_PUNCT = str.maketrans({"‘": "'", "’": "'", "‟": '"', "“": '"', "”": '"', "–": "-", "—": "-"})
+
+
+def verbatim_key(text: str) -> str:
+    """Comparison form of eval/corpus.py's normalise(): NFKC, ASCII quotes and dashes, no
+    whitespace. Also drops private-use glyphs (IDBI bullets U+F0B7, U+F0FC)."""
+    text = unicodedata.normalize("NFKC", text).translate(_PUNCT)
+    return "".join(c for c in _WHITESPACE.sub("", text) if unicodedata.category(c) != "Co")
+
+
+def drop_glyphs(text: str) -> str:
+    """Remove private-use glyphs (IDBI bullets) from display text."""
+    return "".join(c for c in text if unicodedata.category(c) != "Co")
 
 
 def squash_whitespace(text: str) -> str:
@@ -126,5 +142,5 @@ def load_corpus(raw_dir: Path = RAW_DIR) -> dict[DocId, list[PageText]]:
             mode = "layout" if good[doc_id, n] else "plain"
             text = layout if good[doc_id, n] else plain
             lines = (rejoin_split_words(line, vocab) for line in _tidy(text).splitlines())
-            corpus[doc_id].append(PageText(doc_id, n, "\n".join(lines), mode))
+            corpus[doc_id].append(PageText(doc_id, n, "\n".join(lines), mode, plain))
     return corpus
