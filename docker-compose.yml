@@ -1,6 +1,9 @@
 # Start everything:     cp .env.example .env && docker compose up --build
 # Scale the workers:    docker compose up -d --scale worker=3
 # All configuration comes from .env (see .env.example); nothing is hardcoded here.
+# Each service gets only the variables it needs (compose reads .env for ${...}). In particular
+# LLM_API_KEY is passed to llm-gateway only. A shell variable overrides .env, e.g.
+#   LLM_PROVIDER=stub docker compose up -d --build
 
 x-python-healthcheck: &py-healthcheck
   interval: 10s
@@ -11,7 +14,10 @@ x-python-healthcheck: &py-healthcheck
 services:
   postgres:
     image: postgres:16.4-alpine
-    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,13 +36,41 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # The only container that holds the provider key.
   llm-gateway:
     build:
       context: .
       dockerfile: llm_gateway/Dockerfile
-    env_file: .env
-    expose:
-      - "8100"
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      REDIS_URL: ${REDIS_URL:?set in .env}
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
+      LLM_PROVIDER: ${LLM_PROVIDER:-stub}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      STUB_DELAY_MS: ${STUB_DELAY_MS:-1500}
+      LLM_PRICE_PER_1K_PROMPT_TOKENS: ${LLM_PRICE_PER_1K_PROMPT_TOKENS:-0}
+      LLM_PRICE_PER_1K_COMPLETION_TOKENS: ${LLM_PRICE_PER_1K_COMPLETION_TOKENS:-0}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      LLM_REQUEST_DEADLINE_SECONDS: ${LLM_REQUEST_DEADLINE_SECONDS:-60}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-3}
+      LLM_BACKOFF_BASE_SECONDS: ${LLM_BACKOFF_BASE_SECONDS:-1}
+      LLM_BACKOFF_MAX_SECONDS: ${LLM_BACKOFF_MAX_SECONDS:-10}
+      LLM_CB_FAILURE_THRESHOLD: ${LLM_CB_FAILURE_THRESHOLD:-5}
+      LLM_CB_RESET_SECONDS: ${LLM_CB_RESET_SECONDS:-30}
+      LLM_MAX_REQUESTS_PER_MINUTE: ${LLM_MAX_REQUESTS_PER_MINUTE:-4}
+      LLM_RATE_LIMIT_MAX_WAIT_SECONDS: ${LLM_RATE_LIMIT_MAX_WAIT_SECONDS:-20}
+      LLM_FAULT_INJECTION: ${LLM_FAULT_INJECTION:-off}
+    # Loopback only: lets host tools (make eval with --judge-client gateway, the breaker demo)
+    # reach the gateway without exposing it on the network.
+    ports:
+      - "127.0.0.1:${LLM_GATEWAY_HOST_PORT:-8100}:8100"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # The API creates the tables (including llm_calls) at startup.
+      api:
+        condition: service_healthy
     healthcheck:
       <<: *py-healthcheck
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/healthz', timeout=3)"]
@@ -46,7 +80,12 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-    env_file: .env
+    environment: &app-env
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
+      REDIS_URL: ${REDIS_URL:?set in .env}
+      QUEUE_NAME: ${QUEUE_NAME:-disputes}
+      RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-90}
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     depends_on:
@@ -64,7 +103,14 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
-    env_file: .env
+    environment:
+      <<: *app-env
+      # For agent.llm_client.HttpLLMClient; no provider key here.
+      LLM_GATEWAY_URL: ${LLM_GATEWAY_URL:?set in .env}
+      LLM_REQUEST_DEADLINE_SECONDS: ${LLM_REQUEST_DEADLINE_SECONDS:-60}
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-12}
+      AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-20}
+      AGENT_MAX_WALL_CLOCK_SECONDS: ${AGENT_MAX_WALL_CLOCK_SECONDS:-75}
     depends_on:
       postgres:
         condition: service_healthy
