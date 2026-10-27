@@ -157,6 +157,39 @@ the *decision*, while groundedness judges the *wording*.
 
 TruLens was considered and not used; see `docs/decisions.md` D-010.
 
+## Retrieval metrics (`retrieval/evaluate.py`)
+
+Scores the retriever alone, with no agent and no LLM: does it find each scenario's
+`supporting_clauses`? Needs a built corpus (`make ingest`).
+
+```bash
+make retrieval-eval                     # python -m retrieval.evaluate
+make retrieval-eval ARGS="--k 3 5 --modes hybrid --no-write"
+```
+
+Every mode is scored: `hybrid` (what `search_corpus` uses), `dense` (FAISS only) and
+`keyword` (BM25 only). Queries come from a named source (`--queries`). `complaint` uses the
+scenario's `complaint_text` unchanged. The Investigator's query plan will be added as
+another source. When a source gives several queries, their rankings are merged by RRF.
+A retrieved `5#1` counts as clause `5`.
+
+| Metric | Definition |
+|--------|------------|
+| `recall@k` | Σ #(supporting clauses in the top k) / Σ #(supporting clauses), micro-averaged |
+| `hit@k` | #(scenarios with at least one supporting clause in the top k) / N |
+| `primary_recall@k` | #(scenarios whose first supporting clause is in the top k) / N |
+| `must_not_cite@k` | Count of `must_not_cite` clauses in the top k, over all scenarios |
+| `mrr` | Mean of 1 / rank of the first supporting clause (0 if not in the top 50) |
+| `latency_ms` | p50 and p95 of one search call |
+
+Each run writes `eval/reports/<UTC timestamp>_retrieval-<source>.json` (per-scenario ranks
+of every supporting and must-not-cite clause) and a `.md` summary.
+
+With `complaint` queries, recall is low (hybrid recall@10 is about 0.10 with bge-small).
+Customers do not state their account type or how many working days passed, and those facts
+pick the Table-I row and the RBI paragraph. The number is a floor, not a target: the
+Investigator queries from the request fields.
+
 ## Limitations
 
 - **State holidays are not modelled.** `compute_working_days` excludes Sundays and 2nd/4th

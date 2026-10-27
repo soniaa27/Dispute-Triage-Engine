@@ -138,3 +138,12 @@ def test_real_index_finds_scenario_clauses():
     ids = [p.citation_id for p in retriever.search_corpus(
         "bank must credit the amount within 10 working days", k=5)]
     assert {"RBI_2017_CIRCULAR:9", "IDBI_POLICY:7.1"} & set(ids)  # same rule in both
+
+
+def test_single_ranking_modes(retriever):
+    keyword = retriever.search("Rs 10,000", k=5, mode="keyword")
+    assert [p.clause_id for p in keyword] == ["Table-I.03"]  # only chunk with those words
+    assert keyword[0].score > 0
+    dense = retriever.search("burden of proving liability", k=2, mode="dense")
+    assert {p.clause_id for p in dense} == {"12", "14.1"} and dense[0].score <= 1.0
+    assert retriever.search_corpus("liability", 3) == retriever.search("liability", 3)

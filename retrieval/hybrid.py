@@ -14,6 +14,7 @@ Tool-call counting and limits are the graph's job (AGENT_MAX_TOOL_CALLS), not th
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 import faiss
 
@@ -27,6 +28,9 @@ from retrieval.bm25 import BM25
 RRF_K = 60
 # How many of each ranking take part in the fusion.
 FUSION_DEPTH = 50
+
+Mode = Literal["hybrid", "dense", "keyword"]
+MODES: tuple[Mode, ...] = ("hybrid", "dense", "keyword")
 
 
 def _key(doc_id: DocId | str, clause_id: str) -> str:
@@ -67,25 +71,34 @@ class HybridRetriever:
 
     def search_corpus(self, query: str, k: int = 5,
                       doc_ids: Sequence[DocId] | None = None) -> list[Passage]:
+        return self.search(query, k, doc_ids)
+
+    def search(self, query: str, k: int = 5, doc_ids: Sequence[DocId] | None = None,
+               mode: Mode = "hybrid") -> list[Passage]:
+        """search_corpus with a choice of ranking; "dense" and "keyword" alone exist for
+        the retrieval metrics (python -m retrieval.evaluate), which compare all three."""
         if k <= 0 or not query.strip():
             return []
         allowed = {DocId(d) for d in doc_ids} if doc_ids is not None else set(DocId)
-
-        def keep(row: int) -> bool:
-            return self._chunks[row].doc_id in allowed
-
-        dense = search(self._index, self._embedder.embed_query(query), self._index.ntotal)
-        dense_rows = [row for row, _ in dense if keep(row)][:FUSION_DEPTH]
-        keyword = self._bm25.scores(query)
-        keyword_rows = sorted((row for row, s in enumerate(keyword) if s > 0 and keep(row)),
-                              key=lambda row: -keyword[row])[:FUSION_DEPTH]
-
-        fused: dict[int, float] = defaultdict(float)
-        for ranking in (dense_rows, keyword_rows):
-            for rank, row in enumerate(ranking, start=1):
-                fused[row] += 1 / (RRF_K + rank)
-        best = sorted(fused, key=lambda row: (-fused[row], row))[:k]
-        return [self._chunks[row].to_passage(score=round(fused[row], 6)) for row in best]
+        rankings = []
+        if mode in ("hybrid", "dense"):
+            dense = search(self._index, self._embedder.embed_query(query), self._index.ntotal)
+            rankings.append([(row, s) for row, s in dense
+                             if self._chunks[row].doc_id in allowed])
+        if mode in ("hybrid", "keyword"):
+            keyword = self._bm25.scores(query)
+            rankings.append(sorted(((row, s) for row, s in enumerate(keyword)
+                                    if s > 0 and self._chunks[row].doc_id in allowed),
+                                   key=lambda hit: (-hit[1], hit[0])))
+        if mode == "hybrid":
+            fused: dict[int, float] = defaultdict(float)
+            for ranking in rankings:
+                for rank, (row, _) in enumerate(ranking[:FUSION_DEPTH], start=1):
+                    fused[row] += 1 / (RRF_K + rank)
+            hits = sorted(fused.items(), key=lambda hit: (-hit[1], hit[0]))
+        else:
+            hits = rankings[0]
+        return [self._chunks[row].to_passage(score=round(score, 6)) for row, score in hits[:k]]
 
     def get_clause(self, doc_id: DocId, clause_id: str) -> Passage | None:
         """Exact lookup. A clause stored in parts ("5#1", "5#2") is returned whole under its
