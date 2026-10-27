@@ -187,8 +187,9 @@ of every supporting and must-not-cite clause) and a `.md` summary.
 
 With `complaint` queries, recall is low (hybrid recall@10 is about 0.10 with bge-small).
 Customers do not state their account type or how many working days passed, and those facts
-pick the Table-I row and the RBI paragraph. The number is a floor, not a target: the
-Investigator queries from the request fields.
+pick the Table-I row and the RBI paragraph. The number is a floor, not a target. The
+Investigator's LLM chooses its own searches (requirement A1) and can see the request
+fields.
 
 ## Limitations
 

@@ -103,6 +103,9 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+      args:
+        # The corpus index is built into the image with this model (D-018).
+        EMBED_MODEL: ${EMBED_MODEL:-BAAI/bge-small-en-v1.5}
     environment:
       <<: *app-env
       # For agent.llm_client.HttpLLMClient; no provider key here.
