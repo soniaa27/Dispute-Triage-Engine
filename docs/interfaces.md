@@ -76,11 +76,34 @@ DisputeRequest (validated at the API)
   `prompt_version` and `step`, recorded at call time.
   `LLMUnavailableError` is raised when the model cannot be reached (circuit open,
   retries exhausted). Callers must escalate or fail, never answer.
-- **Implements:** whoever owns `llm_gateway/` (Person B in the README layout). That means a
-  client for `llm-gateway`, with timeouts, retries and the circuit breaker. Not built yet.
-  Prices come from `LLM_PRICE_PER_1K_*`.
+- **Implements:** `agent/llm_client.py: HttpLLMClient`. It calls `llm-gateway`
+  (`POST /v1/complete`, `LLM_GATEWAY_URL`), which owns the timeout, retries, circuit breaker,
+  rate limit and cost accounting (see [llm_gateway.md](llm_gateway.md)). The client makes one
+  HTTP request per call and does not retry. Its timeout is
+  `LLM_REQUEST_DEADLINE_SECONDS` + 5 s.
 - **Calls:** both agents. They receive an `LLMClient` instance; they never import a
   provider SDK.
+- **Usage:** construct one client per worker process and reuse it:
+  `HttpLLMClient()` (reads `LLM_GATEWAY_URL`). Pass the graph step name as `step`
+  (`investigator`, `verifier`) and the run's `run_id`; cost and tokens are then reported per
+  step and per run. The correlation id is taken from the worker's bound log context
+  automatically. `temperature` is 0 in the gateway.
+
+### When the model is unavailable
+
+**Required behaviour for every agent node:**
+
+- **`LLMUnavailableError`** (breaker open, retries exhausted, rate limited, gateway timed out
+  or unreachable): stop the run and return `route=escalate`, `status=escalated` with
+  `escalation_reason` "model unavailable". Never return a route the model did not produce,
+  never fall back to a default or a heuristic answer.
+- **`agent.llm_client.LLMGatewayError`** (the gateway rejected the request: auth, bad
+  request, safety block): escalate the same way, with the error's `reason` in the
+  escalation reason.
+
+The Verifier treats a missing Investigator answer the same way. The runbook describes the
+operational side ([runbook.md](runbook.md), failure mode 1). Not yet implemented in the fake
+agent; the real agents must implement it.
 
 ## Retriever (`contracts/tools.py`)
 

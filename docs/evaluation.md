@@ -27,7 +27,7 @@ make eval-compare A=eval/reports/<a>.json B=eval/reports/<b>.json
 | `--ids` | Comma-separated IDs to run |
 | `--out` | Report directory (default `eval/reports/`, git-ignored) |
 | `--timeout` | Per-scenario limit in seconds (default `RUN_TIMEOUT_SECONDS` or 90) |
-| `--judge-client` | `module:factory` returning a `contracts.llm.LLMClient` for the four judged metrics |
+| `--judge-client` | `gateway` (HttpLLMClient to llm-gateway; `make eval` points it at `localhost:8100`) or `module:factory` returning a `contracts.llm.LLMClient`, for the four judged metrics |
 
 The runner calls `agent.runner.run_agent` directly, in-process, with whatever implementation
 is current. Each run writes `eval/reports/<UTC timestamp>_<label>.json` (full per-scenario
@@ -137,7 +137,9 @@ per-scenario metric. A ratio with a zero denominator is reported as `null`.
 
 ### LLM-judged: the four L3 metrics
 
-Implemented in `LLMJudge`, using any `contracts.llm.LLMClient` passed via `--judge-client`.
+Implemented in `LLMJudge`, using any `contracts.llm.LLMClient` passed via `--judge-client`;
+`--judge-client gateway` judges with the model configured in llm-gateway, and the report
+records it as `judge_model`. Judge calls appear in `llm_calls` under `judge-<run_id>`.
 With no client they are reported as `not computed (no LLM client configured)`; no numbers are
 made up. The judge sees the request, the agent's answer and the passages the agent cited,
 never the expected answer. Judge prompts are versioned (`judge-v1`) and treat customer text

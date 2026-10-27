@@ -17,7 +17,7 @@ citations. The system never issues a credit or closes a dispute; a disputes anal
 ```
 client ──HTTP──▶ api (FastAPI) ──enqueue──▶ redis ──▶ worker x N (RQ) ──▶ agent.run_agent
                   │  validate / quarantine                 │                  │
-                  └──────────────▶ postgres ◀──────────────┘          llm-gateway (stub)
+                  └──────────────▶ postgres ◀──────────────┘          llm-gateway ──▶ Gemini
                                    runs, quarantine, feedback
 ```
 
@@ -83,9 +83,24 @@ passed to the worker with the job, and every JSON log line in every service carr
 ## Configuration
 
 All configuration is environment variables, loaded with pydantic-settings and documented
-in [`.env.example`](.env.example). The repository contains no credentials, endpoints or
-model identifiers. `LLM_MODE=stub` makes the gateway return a fixed response after
-`STUB_DELAY_MS`; `provider` mode is a TODO.
+in [`.env.example`](.env.example). The repository contains no credentials or endpoints, and
+the only model identifier is the default in `.env.example`.
+
+### LLM provider
+
+`LLM_PROVIDER` selects the gateway's provider. Switching is configuration only:
+
+| `LLM_PROVIDER` | Needs | Use |
+|----------------|-------|-----|
+| `stub` (default in `.env.example`) | nothing | fixed response after `STUB_DELAY_MS`; clean clones, CI, load tests |
+| `gemini` | `LLM_MODEL`, `LLM_API_KEY` in your own `.env` | Google Gemini via `google-genai` |
+
+To use Gemini, set `LLM_PROVIDER=gemini` and `LLM_API_KEY=<your AI Studio key>` in your
+local `.env` (never commit it), then `docker compose up -d llm-gateway`. docker compose passes
+the key to the `llm-gateway` container only. To force the stub for one run without editing
+`.env`: `LLM_PROVIDER=stub docker compose up -d llm-gateway`. Timeouts, retries, the circuit
+breaker, rate limiting and cost tracking are described in
+[docs/llm_gateway.md](docs/llm_gateway.md).
 
 ## Development
 
@@ -108,6 +123,16 @@ make eval-validate                  # contract, working days, clause ids, verbat
 make eval                           # run the set against the current agent; report in eval/reports/
 make eval ARGS="--prompt-version v2 --ids S01,S14"
 make eval-compare A=eval/reports/<a>.json B=eval/reports/<b>.json
+make eval ARGS="--ids S01,S04,S14 --judge-client gateway"   # LLM-judged metrics via the gateway
+```
+
+LLM gateway (stack running):
+
+```bash
+make llm-live-test      # one real call to the provider in .env (skipped by make test and CI)
+make llm-breaker        # circuit breaker state and counters
+make llm-breaker-demo   # fault injection -> breaker opens -> 503 fast-fail -> recovery (stub)
+make llm-cost-report    # tokens and cost per step and per run, per 100 runs, largest driver
 ```
 
 Other CLIs:
@@ -131,7 +156,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `common/` | JSON logging and SQLAlchemy models used by api and worker | Person B |
 | `api/` | FastAPI app: ingestion, quarantine, runs, feedback, health, metrics | Person B |
 | `worker/` | RQ worker: status transitions, timeout, failure handling | Person B |
-| `llm_gateway/` | `/v1/complete`; stub mode now, provider mode TODO | Person B |
+| `llm_gateway/` | `/v1/complete`: providers (stub, gemini), retry, breaker, rate limit, cost | Person B |
 | `web/` | Static HTML + vanilla JS client | Person B |
 | `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
 | `ingest/` | Corpus pipeline CLI (stub) | Person A |
@@ -158,6 +183,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 - [Design decisions](docs/decisions.md)
 - [Agent interfaces and clause ID conventions](docs/interfaces.md)
 - [Evaluation set and metrics](docs/evaluation.md)
+- [LLM gateway: providers, resilience, cost](docs/llm_gateway.md)
 - [Runbook](docs/runbook.md)
 - [Incident log](docs/incident_log.md)
 - [Corpus sources](corpus/README.md)
