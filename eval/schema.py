@@ -113,7 +113,7 @@ def reporting_delay(request: DisputeRequest) -> int | None:
 
 
 def load_raw(path: Path = DEFAULT_SCENARIOS) -> list[dict]:
-    with path.open() as fh:
+    with path.open(encoding="utf-8") as fh:
         return [json.loads(line) for line in fh if line.strip()]
 
 
