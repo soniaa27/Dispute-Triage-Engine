@@ -101,11 +101,19 @@ make schema   # regenerate the JSON Schema after changing contracts/
 Other targets: `make up`, `make down`, `make logs`, `make ps`, `make scale WORKERS=3`,
 `make smoke`, `make clean`. Run `make help` for the list.
 
-Other CLIs (stubs for now):
+Evaluation (24 scenarios; see [docs/evaluation.md](docs/evaluation.md)):
 
 ```bash
-python -m ingest build              # corpus pipeline (prints "not implemented")
-python -m eval.run_eval             # validates eval/scenarios.jsonl against the contract
+make eval-validate                  # contract, working days, clause ids, verbatim passages, coverage
+make eval                           # run the set against the current agent; report in eval/reports/
+make eval ARGS="--prompt-version v2 --ids S01,S14"
+make eval-compare A=eval/reports/<a>.json B=eval/reports/<b>.json
+```
+
+Other CLIs:
+
+```bash
+python -m ingest build              # corpus pipeline (stub: prints "not implemented")
 python scripts/hash_corpus.py       # SHA-256 of files in corpus/raw/
 ```
 
@@ -127,7 +135,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `web/` | Static HTML + vanilla JS client | Person B |
 | `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
 | `ingest/` | Corpus pipeline CLI (stub) | Person A |
-| `eval/` | `scenarios.jsonl` + `run_eval.py` (stub) | Person A |
+| `eval/` | 24 scenarios, validator, batch runner, metrics, report compare | Person A |
 | `corpus/` | Source PDFs in `raw/`, provenance table in README | Person A |
 | `observability/` | Prometheus / Grafana / Jaeger config (placeholder) | Person B |
 | `loadtest/` | Locust file (stub) | Person B |
@@ -149,6 +157,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 - [Architecture](docs/architecture.md)
 - [Design decisions](docs/decisions.md)
 - [Agent interfaces and clause ID conventions](docs/interfaces.md)
+- [Evaluation set and metrics](docs/evaluation.md)
 - [Runbook](docs/runbook.md)
 - [Incident log](docs/incident_log.md)
 - [Corpus sources](corpus/README.md)
