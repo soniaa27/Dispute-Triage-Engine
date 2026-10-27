@@ -20,5 +20,9 @@ known-first-party = ["contracts", "common", "api", "worker", "agent", "ingest", 
 pythonpath = ["."]
 testpaths = ["tests"]
 # `live` tests call a real provider; skipped unless selected (make llm-live-test).
-addopts = "-q -m 'not live'"
-markers = ["live: makes a real call to the configured LLM provider (uses .env)"]
+# `model` tests load the real embedding model (downloads it once); pytest -m model.
+addopts = "-q -m 'not live and not model'"
+markers = [
+    "live: makes a real call to the configured LLM provider (uses .env)",
+    "model: loads the real embedding model (EMBED_MODEL, cached in data/models/)",
+]
