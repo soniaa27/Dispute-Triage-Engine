@@ -19,4 +19,6 @@ known-first-party = ["contracts", "common", "api", "worker", "agent", "ingest", 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "-q"
+# `live` tests call a real provider; skipped unless selected (make llm-live-test).
+addopts = "-q -m 'not live'"
+markers = ["live: makes a real call to the configured LLM provider (uses .env)"]
