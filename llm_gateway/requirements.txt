@@ -4,3 +4,10 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 structlog==24.4.0
 prometheus-client==0.21.1
+# Provider SDK (Gemini) and its HTTP layer, whose exceptions the provider maps
+google-genai==2.8.0
+httpx==0.28.1
+# Breaker and rate-limiter state; llm_calls persistence
+redis==5.2.1
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
