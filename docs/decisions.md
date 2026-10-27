@@ -183,3 +183,51 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
 - **Tokens are stored too,** so cost can be recomputed under a different price for
   what-if analysis. On the free tier the prices are 0; tokens are the cost measure, and the
   cost report falls back to tokens to find the largest driver.
+
+## D-015 PDF text: pypdf layout mode, checked against plain mode per page (rejected: one mode, PyMuPDF/pdfplumber)
+
+- **Problem:** each pypdf mode fails on part of the corpus.
+  - Plain mode splits many words ("wor king", "h as"), mostly in IDBI_POLICY.
+  - Layout mode keeps words and table columns but garbles RBI_2017_CIRCULAR page 4
+    (Table 1) into CJK characters.
+- **Chosen:** extract every page in layout mode and use it only if, ignoring whitespace, it
+  has the same characters as plain mode (layout may reorder text; corruption changes it).
+  Otherwise fall back to plain. Then rejoin split words on every page, using word counts
+  from the corpus itself (joined word must be more frequent than a fragment; a capitalised
+  right part never joins). Only RBI page 4 falls back.
+- **Invariant:** only whitespace changes, so chunk text stays verbatim under the
+  whitespace-insensitive comparison in `eval/corpus.py`. Tested on every page.
+- **Rejected: another PDF library.** `eval/corpus.py` defines "verbatim" through pypdf;
+  using the same library keeps the chunker and the evaluation on the same text.
+
+## D-016 Clause-level chunking by rules, tables as verified specs (rejected: fixed-size chunks, LLM parsing)
+
+- **Chosen:** one chunk per clause, using each document's own numbering
+  (`docs/interfaces.md`). A small rule-based splitter is configured per document
+  (`ingest/documents.py`): numbering levels, headings, page furniture, fixed-id markers
+  (`Table-2-note`, `Table-I-note`, `7(ii)-beyond-7`). A number opens a clause only if it
+  follows the previous sibling, which also tells the letter `(i)` from the roman `(i)`.
+- **Tables are transcribed, not parsed:** pypdf cannot recover merged cells (IDBI Table-I
+  rows 03-07 share one liability cell) or the garbled RBI Table 1. Each table is written out
+  as a spec and every cell is checked verbatim against the PDF on every build, so a typo or
+  a new PDF version fails the build instead of producing a wrong citation. Each row is also
+  its own chunk, labelled by column, with its reporting-delay band and footnote.
+- **Rejected: fixed-size or recursive character chunks.** A chunk would span clauses, so a
+  citation could not name one `clause_id`, and `get_clause` could not return exactly the
+  clause the Verifier asks for.
+- **Rejected: an LLM to parse the PDFs.** Not deterministic, costs calls on a 4 RPM free
+  tier, and its output would still need the same verbatim check.
+- **Cost:** the structure of three fixed PDFs is described in code. A new document version
+  needs its config and table specs checked; the tests and table verification say where.
+
+## D-017 Ingest is idempotent on source and code hashes
+
+- `python -m ingest build` skips when `data/manifest.json` records the same SHA-256 for
+  every PDF and the same pipeline hash (all `ingest/*.py` files plus the pypdf version).
+  Hashing the code means a chunking change can never be served from a stale build, without
+  anyone remembering to bump a version.
+- The manifest is the corpus freshness record (built_at, source hashes, provenance match
+  against `corpus/README.md`, chunk counts, stage timings, throughput). `python -m ingest
+  status` exits 1 when the output is stale.
+- Files are written to a temporary name and renamed, so an interrupted build leaves the
+  previous output intact.

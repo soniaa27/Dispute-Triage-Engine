@@ -21,8 +21,11 @@ evaluation scenarios must be checked against these exact files.
 
 | doc_id | Filename (in `corpus/raw/`) | Download date | SHA-256 | Text layer? (y/n, OCR needed?) |
 |--------|-----------------------------|---------------|---------|--------------------------------|
-| RBI_2017_CIRCULAR | RBI customer protection.pdf | 2026-10-24 | 630f68e6f25a8cdcfe942c1e20b73b0c807b1690b0536b84b1e8b61b23f64b0e | Verify |
-| IDBI_POLICY | Unauthorized transactions policy.pdf | 2026-10-24 | c76aa964ededcf8dede1ed9802297e737a5209442647ef237570226d113712cd | Verify |
-| RBI_IOS_2026 | Ombudsman Scheme.pdf | 2026-10-24 | f119574982a073819d2286c3d016ef10e1fbeebed8e23864e40e885d950901b6 | Verify |
+| RBI_2017_CIRCULAR | RBI customer protection.pdf | 2026-10-24 | 630f68e6f25a8cdcfe942c1e20b73b0c807b1690b0536b84b1e8b61b23f64b0e | y, no OCR. Page 4 (Table 1) is garbled by pypdf layout mode; plain mode is used for it |
+| IDBI_POLICY | Unauthorized transactions policy.pdf | 2026-10-24 | c76aa964ededcf8dede1ed9802297e737a5209442647ef237570226d113712cd | y, no OCR. AES-encrypted with an empty password (pypdf needs `cryptography`) |
+| RBI_IOS_2026 | Ombudsman Scheme.pdf | 2026-10-24 | f119574982a073819d2286c3d016ef10e1fbeebed8e23864e40e885d950901b6 | y, no OCR |
 
 `doc_id` is the identifier used in `Citation.doc_id`.
+
+`python -m ingest build` checks each file's SHA-256 against this table and records the
+result in `data/manifest.json` (`matches_provenance`); a mismatch is logged as a warning.
