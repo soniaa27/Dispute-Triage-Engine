@@ -10,7 +10,8 @@ citations. The system never issues a credit or closes a dispute; a disputes anal
 
 > **Status: scaffold.** The pipeline runs end to end with a **fake agent**
 > (`agent/runner.py`): fixed 2 s delay, placeholder citations, escalates when the complaint
-> mentions "OTP". Retrieval, the real agents, evaluation and observability come next.
+> mentions "OTP". Corpus ingestion is done (`python -m ingest build`: clause-level chunks
+> with verified tables). Retrieval, the real agents and observability come next.
 
 ## Architecture
 
@@ -138,7 +139,8 @@ make llm-cost-report    # tokens and cost per step and per run, per 100 runs, la
 Other CLIs:
 
 ```bash
-python -m ingest build              # corpus pipeline (stub: prints "not implemented")
+python -m ingest build              # or make ingest: corpus/raw/ -> data/chunks.jsonl + manifest
+python -m ingest status             # or make ingest-status: is data/ fresh? (exit 1 if not)
 python scripts/hash_corpus.py       # SHA-256 of files in corpus/raw/
 ```
 
@@ -159,7 +161,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `llm_gateway/` | `/v1/complete`: providers (stub, gemini), retry, breaker, rate limit, cost | Person B |
 | `web/` | Static HTML + vanilla JS client | Person B |
 | `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
-| `ingest/` | Corpus pipeline CLI (stub) | Person A |
+| `ingest/` | Corpus pipeline: PDF text, clause chunking, verified tables, build manifest | Person A |
 | `eval/` | 24 scenarios, validator, batch runner, metrics, report compare | Person A |
 | `corpus/` | Source PDFs in `raw/`, provenance table in README | Person A |
 | `observability/` | Prometheus / Grafana / Jaeger config (placeholder) | Person B |
