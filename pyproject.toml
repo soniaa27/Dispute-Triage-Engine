@@ -14,7 +14,7 @@ extend-exclude = [".venv", "data"]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["contracts", "common", "api", "worker", "agent", "ingest", "eval", "llm_gateway"]
+known-first-party = ["contracts", "common", "api", "worker", "agent", "ingest", "retrieval", "eval", "llm_gateway"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

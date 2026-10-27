@@ -162,6 +162,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `web/` | Static HTML + vanilla JS client | Person B |
 | `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
 | `ingest/` | Corpus pipeline: PDF text, clause chunking, verified tables, build manifest | Person A |
+| `retrieval/` | `HybridRetriever`: dense (FAISS) + keyword (BM25) search, clause lookup | Person A |
 | `eval/` | 24 scenarios, validator, batch runner, metrics, report compare | Person A |
 | `corpus/` | Source PDFs in `raw/`, provenance table in README | Person A |
 | `observability/` | Prometheus / Grafana / Jaeger config (placeholder) | Person B |
