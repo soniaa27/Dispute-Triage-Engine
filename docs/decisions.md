@@ -104,3 +104,35 @@ Short records of decisions and what was rejected. Add new entries at the bottom.
   `conflicting_provisions` and escalate.
 - **Not yet done:** state bank-holiday calendars by `home_branch_state`. Until then,
   holidays must be passed in explicitly.
+
+## D-010 LLM-as-judge on our LLMClient instead of TruLens
+
+- L3 allows "TruLens or equivalent". `trulens-core` + `trulens-feedback` resolve, but pull in
+  about 40 packages (pandas, scipy, scikit-learn, nltk, numpy, alembic, OpenTelemetry SDK)
+  into the dev environment.
+- More importantly, TruLens feedback providers call provider SDKs directly. Judge calls would
+  bypass `llm-gateway`, so they would escape the per-call cost accounting (L5), the circuit
+  breaker (A5) and configuration-only provider switching (section 12 of the brief).
+- **Chosen:** `eval/metrics.py: LLMJudge`, about 100 lines, judging through
+  `contracts.llm.LLMClient`. The metric definitions follow TruLens' RAG triad (groundedness,
+  context relevance) plus faithfulness and hallucination rate, and are written out in
+  `docs/evaluation.md`.
+- Revisit if we need TruLens' dashboard or its pre-built feedback functions.
+
+## D-011 Evaluation set judgement calls
+
+Where the corpus leaves the expected outcome open, the evaluation set records these choices
+(details and limitations in `docs/evaluation.md`).
+
+- **Section 4.1 case (S14): escalate.** IDBI 5.12 lists a "Vishing Attack" as negligence, but
+  the brief requires escalation and the RBI circular does not settle it.
+- **Beyond 7 working days up to 60 calendar days (S07): decline**, because there is no shadow
+  credit. The basis must state the IDBI Table-I row 10 compensation (up to ₹2,500 or the
+  transaction value, whichever is lower); `basis_must_mention` checks it.
+- **Duplicate charge (S12): chargeback.** The second debit is unauthorised (IDBI 5.21).
+- **Merchant non-delivery (S13): escalate, not chargeback.** The customer authorised the
+  payment, so it is outside the corpus, and there is no clause to ground a chargeback.
+- **UPI PIN (S10)** is treated as the "PIN" in IDBI 5.12's list of credentials.
+- **Liability value `undetermined`** marks escalations the corpus cannot settle (conflicts,
+  boundaries), as distinct from `not_applicable` (out of scope).
+- **Not modelled:** state bank holidays and the RBI paragraph 9 discretionary waiver.

@@ -2,10 +2,10 @@
 PY ?= .venv/bin/python
 WORKERS ?= 3
 
-.PHONY: help env venv up down logs ps test lint schema scale smoke clean
+.PHONY: help env venv up down logs ps test lint schema scale smoke clean eval eval-validate eval-compare
 
 help:
-	@grep -E '^[a-z]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-8s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-14s %s\n", $$1, $$2}'
 
 env: ## create .env from .env.example if missing
 	@test -f .env || cp .env.example .env
@@ -42,3 +42,13 @@ smoke: ## end-to-end smoke test against the running stack
 
 clean: ## stop the stack and delete its volumes
 	docker compose down -v
+
+eval-validate: ## check scenarios: contract, working days, clause ids, verbatim passages, coverage
+	$(PY) -m eval.validate
+
+eval: ## run the evaluation set against the current agent (ARGS="--ids S01,S14" etc.)
+	$(PY) -m eval.run_eval $(ARGS)
+
+eval-compare: ## compare two reports: make eval-compare A=eval/reports/a.json B=eval/reports/b.json
+	@test -n "$(A)" -a -n "$(B)" || (echo "usage: make eval-compare A=report_a.json B=report_b.json"; exit 2)
+	$(PY) -m eval.compare $(A) $(B)
