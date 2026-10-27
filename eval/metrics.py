@@ -247,14 +247,15 @@ def label_counts(reply: dict[str, Any]) -> tuple[int, int, int]:
 class LLMJudge:
     """LLM-as-judge for the four L3 metrics, using any contracts.llm.LLMClient."""
 
-    def __init__(self, client: LLMClient, run_id: str = "eval-judge"):
+    def __init__(self, client: LLMClient):
         self.client = client
-        self.run_id = run_id
+        self.models: set[str] = set()
 
-    def _ask(self, prompt: str, step: str) -> dict[str, Any]:
+    def _ask(self, prompt: str, step: str, run_id: str) -> dict[str, Any]:
         response = self.client.complete(
-            prompt, prompt_version=JUDGE_PROMPT_VERSION, step=step, run_id=self.run_id
+            prompt, prompt_version=JUDGE_PROMPT_VERSION, step=step, run_id=run_id
         )
+        self.models.add(response.model)
         return parse_json_reply(response.text)
 
     def score(self, runs: list[ScenarioRun]) -> dict[str, Any]:
@@ -266,17 +267,19 @@ class LLMJudge:
             if result is None or not result.citations:
                 continue
             facts, passages = _facts(run.scenario), _passages(result)
+            # Judge calls are recorded in llm_calls under their own run id.
+            judge_run = f"judge-{result.run_id}"[:64]
             answer = f"{result.liability_position or ''}\n{result.basis or ''}".strip()
             if answer:
                 s, u, t = label_counts(self._ask(
                     _CLAIMS_PROMPT.format(facts=facts, passages=passages, answer=answer),
-                    "judge_claims",
+                    "judge_claims", judge_run,
                 ))
                 supported, unsupported, claims = supported + s, unsupported + u, claims + t
             for citation in result.citations:
                 reply = self._ask(
                     _RELEVANCE_PROMPT.format(facts=facts, passage=citation.text),
-                    "judge_relevance",
+                    "judge_relevance", judge_run,
                 )
                 relevance.append(min(1.0, max(0.0, float(reply.get("relevance", 0)))))
             reply = self._ask(
@@ -284,7 +287,7 @@ class LLMJudge:
                     facts=facts, passages=passages, route=result.route,
                     position=result.liability_position,
                 ),
-                "judge_faithfulness",
+                "judge_faithfulness", judge_run,
             )
             faithful.append(1 if reply.get("faithful") is True else 0)
         return {
@@ -295,6 +298,7 @@ class LLMJudge:
             "faithfulness": _ratio(sum(faithful), len(faithful)),
             "hallucination_rate": _ratio(unsupported, claims),
             "judge_prompt_version": JUDGE_PROMPT_VERSION,
+            "judge_model": ", ".join(sorted(self.models)) or None,
         }
 
 
@@ -304,6 +308,7 @@ def judged_metrics(runs: list[ScenarioRun], client: LLMClient | None) -> dict[st
         return {name: NOT_COMPUTED_NO_CLIENT for name in names}
     try:
         return LLMJudge(client).score(runs)
-    except (LLMUnavailableError, ValueError) as exc:
+    # RuntimeError covers agent.llm_client.LLMGatewayError (request rejected by the gateway).
+    except (LLMUnavailableError, ValueError, RuntimeError) as exc:
         reason = f"not computed (judge failed: {exc})"
         return {name: reason for name in names}

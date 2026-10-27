@@ -3,9 +3,9 @@
 Runs each scenario through agent.runner.run_agent (whatever implementation is current),
 scores the results and writes eval/reports/<timestamp>_<label>.json and .md.
 
-The four LLM-judged metrics need an LLMClient: pass --judge-client module:factory, where
-factory() returns an object implementing contracts.llm.LLMClient. Without it they are
-reported as not computed.
+The four LLM-judged metrics need an LLMClient: pass --judge-client gateway (HttpLLMClient to
+llm-gateway at LLM_GATEWAY_URL) or --judge-client module:factory, where factory() returns an
+object implementing contracts.llm.LLMClient. Without it they are reported as not computed.
 """
 
 import argparse
@@ -111,6 +111,7 @@ def markdown_summary(report: dict[str, Any]) -> str:
         f"(sha256 {meta['scenarios_sha256'][:12]})",
         f"- Agent prompt versions seen: {', '.join(meta['agent_prompt_versions']) or 'none'}",
         f"- Mean latency: {_fmt(meta['latency_ms_mean'])} ms",
+        f"- Judge: {meta['judge']} (model: {meta.get('judge_model') or 'n/a'})",
         "",
         "## Metrics",
         "",
@@ -137,9 +138,12 @@ def markdown_summary(report: dict[str, Any]) -> str:
 
 
 def load_judge_client(spec: str | None) -> LLMClient | None:
-    """'package.module:factory' -> factory(), which must return an LLMClient."""
+    """'gateway' -> HttpLLMClient (LLM_GATEWAY_URL); 'package.module:factory' -> factory(),
+    which must return an LLMClient."""
     if not spec:
         return None
+    if spec == "gateway":
+        spec = "agent.llm_client:from_env"
     module_name, _, attr = spec.partition(":")
     client = getattr(importlib.import_module(module_name), attr)()
     if not isinstance(client, LLMClient):
@@ -155,7 +159,9 @@ def run_eval(
     out_dir: Path,
     timeout_s: float = DEFAULT_TIMEOUT_S,
     judge_client: LLMClient | None = None,
+    judge_label: str | None = None,
 ) -> tuple[dict[str, Any], Path, Path]:
+    judge_label = judge_label or ("configured" if judge_client else "none")
     runs = []
     for scenario in scenarios:
         run = run_one(scenario, timeout_s)
@@ -177,7 +183,8 @@ def run_eval(
             "scenario_count": len(runs),
             "scenario_ids": [r.scenario.id for r in runs],
             "latency_ms_mean": round(sum(latencies) / len(latencies), 1) if latencies else None,
-            "judge": "configured" if judge_client else "none",
+            "judge": judge_label,
+            "judge_model": metrics.get("judge_model"),
         },
         "metrics": metrics,
         "scenarios": [scenario_record(r) for r in runs],
@@ -197,7 +204,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S,
                         help="per-scenario wall-clock limit in seconds")
-    parser.add_argument("--judge-client", help="module:factory returning an LLMClient")
+    parser.add_argument("--judge-client",
+                        help="'gateway' (llm-gateway at LLM_GATEWAY_URL) or module:factory "
+                             "returning an LLMClient")
     args = parser.parse_args(argv)
 
     scenarios = load_scenarios(args.scenarios)
@@ -217,9 +226,14 @@ def main(argv: list[str] | None = None) -> int:
         out_dir=args.out,
         timeout_s=args.timeout,
         judge_client=load_judge_client(args.judge_client),
+        judge_label=args.judge_client,
     )
     print(f"\nroute_accuracy={_fmt(report['metrics']['route_accuracy'])} "
           f"citation_resolution_rate={_fmt(report['metrics']['citation_resolution_rate'])}")
+    judged = ("groundedness", "context_relevance", "faithfulness", "hallucination_rate")
+    print(" ".join(f"{name}={_fmt(report['metrics'][name])}" for name in judged))
+    if report["meta"]["judge_model"]:
+        print(f"judge model: {report['meta']['judge_model']}")
     print(f"wrote {os.path.relpath(json_path)}\nwrote {os.path.relpath(md_path)}")
     return 0
 
