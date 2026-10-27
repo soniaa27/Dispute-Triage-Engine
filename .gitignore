@@ -18,7 +18,8 @@ env/
 # Build outputs: vector index, embeddings cache, eval reports.
 # Corpus PDFs in corpus/raw/ ARE committed (they are versioned inputs).
 data/
-eval/reports/
+eval/reports/*
+!eval/reports/.gitkeep
 
 # OS / editor
 .DS_Store
