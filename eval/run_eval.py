@@ -25,10 +25,12 @@ from typing import Any
 
 from agent import runner
 from contracts.llm import LLMClient
+from eval.chunks import ChunkIndex, ChunksMissingError, load_chunk_index
 from eval.corpus import load_corpus_text
 from eval.metrics import (
     ScenarioRun,
     basis_missing_terms,
+    citation_failures,
     citation_ids,
     deterministic_metrics,
     judged_metrics,
@@ -57,7 +59,7 @@ def run_one(scenario: Scenario, timeout_s: float) -> ScenarioRun:
     return ScenarioRun(scenario=scenario, result=result, latency_ms=latency_ms, error=error)
 
 
-def scenario_record(run: ScenarioRun) -> dict[str, Any]:
+def scenario_record(run: ScenarioRun, chunks: ChunkIndex) -> dict[str, Any]:
     exp, res = run.scenario.expected, run.result
     returned = set(citation_ids(res))
     return {
@@ -75,6 +77,7 @@ def scenario_record(run: ScenarioRun) -> dict[str, Any]:
         "supporting_clauses_missing": sorted(set(exp.supporting_clauses) - returned),
         "must_not_cite_hit": sorted(set(exp.must_not_cite) & returned),
         "basis_terms_missing": basis_missing_terms(run),
+        "citation_failures": citation_failures(res, chunks),
         "latency_ms": run.latency_ms,
         "error": run.error,
         "result": res.model_dump(mode="json") if res else None,
@@ -119,20 +122,30 @@ def markdown_summary(report: dict[str, Any]) -> str:
         "|--------|-------|",
     ]
     for name, value in metrics.items():
+        if name == "pdf_verbatim_rate":
+            name = "pdf_verbatim_rate (informational, not used for scoring)"
         if not isinstance(value, dict):
             lines.append(f"| {name} | {_fmt(value)} |")
+    reasons = metrics.get("citation_failures_by_reason") or {}
+    if reasons:
+        lines += ["", "Citation failures by reason: "
+                  + ", ".join(f"{k}={v}" for k, v in reasons.items())]
     lines += [
         "",
         "## Per scenario",
         "",
-        "| ID | Category | Expected | Actual | OK | Missing clauses | Error |",
-        "|----|----------|----------|--------|----|-----------------|-------|",
+        "| ID | Category | Expected | Actual | OK | Missing clauses | Unresolved citations "
+        "| Error |",
+        "|----|----------|----------|--------|----|-----------------|----------------------"
+        "|-------|",
     ]
     for s in report["scenarios"]:
+        unresolved = ", ".join(f"{f['citation']} ({f['reason']})"
+                               for f in s.get("citation_failures", []))
         lines.append(
             f"| {s['id']} | {s['category']} | {s['expected_route']} | {_fmt(s['actual_route'])} "
             f"| {'yes' if s['route_ok'] else 'no'} | {', '.join(s['supporting_clauses_missing'])} "
-            f"| {s['error'] or ''} |"
+            f"| {unresolved} | {s['error'] or ''} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -160,8 +173,11 @@ def run_eval(
     timeout_s: float = DEFAULT_TIMEOUT_S,
     judge_client: LLMClient | None = None,
     judge_label: str | None = None,
+    chunks: ChunkIndex | None = None,
 ) -> tuple[dict[str, Any], Path, Path]:
     judge_label = judge_label or ("configured" if judge_client else "none")
+    if chunks is None:
+        chunks = load_chunk_index()  # before the runs, so a missing build fails fast
     runs = []
     for scenario in scenarios:
         run = run_one(scenario, timeout_s)
@@ -171,7 +187,8 @@ def run_eval(
         runs.append(run)
 
     corpus = load_corpus_text()
-    metrics = {**deterministic_metrics(runs, corpus), **judged_metrics(runs, judge_client)}
+    metrics = {**deterministic_metrics(runs, chunks, corpus),
+               **judged_metrics(runs, judge_client)}
     latencies = [r.latency_ms for r in runs]
     report = {
         "meta": {
@@ -187,7 +204,7 @@ def run_eval(
             "judge_model": metrics.get("judge_model"),
         },
         "metrics": metrics,
-        "scenarios": [scenario_record(r) for r in runs],
+        "scenarios": [scenario_record(r, chunks) for r in runs],
     }
     json_path, md_path = write_reports(report, out_dir)
     return report, json_path, md_path
@@ -219,17 +236,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit is not None:
         scenarios = scenarios[: args.limit]
 
-    report, json_path, md_path = run_eval(
-        scenarios,
-        prompt_version=args.prompt_version,
-        scenarios_file=args.scenarios,
-        out_dir=args.out,
-        timeout_s=args.timeout,
-        judge_client=load_judge_client(args.judge_client),
-        judge_label=args.judge_client,
-    )
+    try:
+        report, json_path, md_path = run_eval(
+            scenarios,
+            prompt_version=args.prompt_version,
+            scenarios_file=args.scenarios,
+            out_dir=args.out,
+            timeout_s=args.timeout,
+            judge_client=load_judge_client(args.judge_client),
+            judge_label=args.judge_client,
+        )
+    except ChunksMissingError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     print(f"\nroute_accuracy={_fmt(report['metrics']['route_accuracy'])} "
-          f"citation_resolution_rate={_fmt(report['metrics']['citation_resolution_rate'])}")
+          f"citation_resolution_rate={_fmt(report['metrics']['citation_resolution_rate'])} "
+          f"pdf_verbatim_rate={_fmt(report['metrics']['pdf_verbatim_rate'])} (informational)")
     judged = ("groundedness", "context_relevance", "faithfulness", "hallucination_rate")
     print(" ".join(f"{name}={_fmt(report['metrics'][name])}" for name in judged))
     if report["meta"]["judge_model"]:
