@@ -197,12 +197,12 @@ def test_first_draft_has_no_feedback():
 @pytest.mark.skipif(not corpus_available(), reason="corpus PDFs not present")
 def test_live_investigation_of_s01():
     """Real gateway + real index: pytest -m "live and model" -s tests/test_investigator.py
-    (needs `python -m ingest build` and llm-gateway on LLM_GATEWAY_URL or localhost:8100)."""
+    (needs `python -m ingest build` and llm-gateway on HOST_LLM_GATEWAY_URL or localhost:8100)."""
     from agent.llm_client import HttpLLMClient
     from retrieval import HybridRetriever
 
     scenario = next(s for s in load_scenarios() if s.id == "S01")
-    client = HttpLLMClient(os.environ.get("LLM_GATEWAY_URL") or "http://localhost:8100")
+    client = HttpLLMClient(os.environ.get("HOST_LLM_GATEWAY_URL") or "http://localhost:8100")
     out = investigate(AgentState(request=scenario.request, run_id="live-s01"),
                       HybridRetriever.load(), client)
     print(out.model_dump_json(indent=2))

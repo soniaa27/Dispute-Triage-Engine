@@ -20,3 +20,12 @@ agents:
 
 The version string is recorded in `RunResult.prompt_version` for every run.
 The current fake agent reports `prompt_version: fake-0`.
+
+Load prompts with `agent.prompts`: `agent_prompts("investigator")` returns that agent's
+templates from `CURRENT_PROMPT_VERSION` (`v1`), and `load_prompts("v1")` returns the whole
+file. Templates use `string.Template` placeholders (`$facts`), so JSON braces need no
+escaping. A file's `version:` must equal its file name; a test checks this.
+
+| Version | Agents | Notes |
+|---------|--------|-------|
+| `v1` | investigator | Baseline tool loop: search / answer JSON, delay given as a fact (D-019) |

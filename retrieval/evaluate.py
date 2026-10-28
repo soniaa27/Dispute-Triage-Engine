@@ -5,10 +5,13 @@ scenario's answer rests on (expected.supporting_clauses)?
 
 Queries come from a query source (QUERY_SOURCES). "complaint" is the scenario's
 complaint_text as the customer wrote it: the floor, since it never states the account
-type or the reporting delay that pick the right table row. The Investigator's query plan
-is meant to be added as a further source. A source may give several queries per
-scenario; their rankings are merged with the retriever's RRF. Each mode (hybrid, dense
-only, keyword only) is scored separately.
+type or the reporting delay that pick the right table row. "investigator" runs the real
+Investigator (LLM through llm-gateway, ~2 calls per scenario at 4 calls/min, so use --ids
+for a quick check) and scores the searches it chose (queries_run). A source may give
+several queries per scenario; their rankings are merged with the retriever's RRF. Each
+mode (hybrid, dense only, keyword only) is scored separately.
+
+    python -m retrieval.evaluate --queries investigator --ids S01 S09 [--gateway URL]
 
 Metrics, for each k (a retrieved "5#1" counts as clause "5"):
   recall@k          = #(supporting clauses in the top k) / #(supporting clauses)   (micro)
@@ -25,6 +28,7 @@ Writes eval/reports/<timestamp>_retrieval-<source>.json (per-scenario ranks incl
 
 import argparse
 import json
+import os
 import statistics
 import sys
 import time
@@ -48,6 +52,38 @@ QuerySource = Callable[[Scenario], list[str]]
 QUERY_SOURCES: dict[str, QuerySource] = {
     "complaint": lambda scenario: [scenario.request.complaint_text],
 }
+DEFAULT_GATEWAY = "http://localhost:8100"
+
+
+class InvestigatorQueries:
+    """Query source: the searches the Investigator chose for each scenario. Each scenario
+    is investigated once (cached across modes); a run that fails gives no queries and is
+    recorded in `failures`."""
+
+    def __init__(self, retriever: HybridRetriever, llm: Any):
+        self.retriever, self.llm = retriever, llm
+        self.failures: dict[str, str] = {}
+        self._cache: dict[str, list[str]] = {}
+
+    def __call__(self, scenario: Scenario) -> list[str]:
+        if scenario.id not in self._cache:
+            self._cache[scenario.id] = self._investigate(scenario)
+        return self._cache[scenario.id]
+
+    def _investigate(self, scenario: Scenario) -> list[str]:
+        from agent.investigator import InvestigatorError, investigate
+        from agent.llm_client import LLMGatewayError
+        from contracts.agent import AgentState
+        from contracts.llm import LLMUnavailableError
+
+        # No wall-clock limit here: only the queries are being measured.
+        state = AgentState(request=scenario.request, run_id=f"retrieval-eval-{scenario.id}",
+                           max_wall_clock_seconds=3600)
+        try:
+            return investigate(state, self.retriever, self.llm).queries_run
+        except (InvestigatorError, LLMUnavailableError, LLMGatewayError) as exc:
+            self.failures[scenario.id] = f"{type(exc).__name__}: {exc}"
+            return []
 
 
 def _base(citation_id: str) -> str:
@@ -83,6 +119,7 @@ def score_mode(retriever: HybridRetriever, scenarios: list[Scenario], mode: Mode
             "id": scenario.id,
             "supporting": {c: _rank(retrieved, c) for c in scenario.expected.supporting_clauses},
             "must_not_cite": {c: _rank(retrieved, c) for c in scenario.expected.must_not_cite},
+            "queries": queries(scenario),
             "top5": retrieved[:5],
         })
 
@@ -112,7 +149,10 @@ def score_mode(retriever: HybridRetriever, scenarios: list[Scenario], mode: Mode
 
 def evaluate(retriever: HybridRetriever, scenarios: list[Scenario],
              modes: tuple[Mode, ...] = MODES, ks: tuple[int, ...] = DEFAULT_KS,
-             model: str | None = None, source: str = "complaint") -> dict[str, Any]:
+             model: str | None = None, source: str = "complaint",
+             queries: QuerySource | None = None) -> dict[str, Any]:
+    queries = queries or QUERY_SOURCES[source]
+    modes_scored = {mode: score_mode(retriever, scenarios, mode, ks, queries) for mode in modes}
     return {
         "meta": {
             "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -122,9 +162,9 @@ def evaluate(retriever: HybridRetriever, scenarios: list[Scenario],
             "query_source": source,
             "embedding_model": model,
             "ks": list(ks),
+            "query_failures": getattr(queries, "failures", {}),
         },
-        "modes": {mode: score_mode(retriever, scenarios, mode, ks, QUERY_SOURCES[source])
-                  for mode in modes},
+        "modes": modes_scored,
     }
 
 
@@ -147,6 +187,9 @@ def markdown_summary(report: dict[str, Any]) -> str:
         m = result["metrics"]
         values = [m[c] for c in columns[:-1]] + [m["latency_ms"]["p50"]]
         lines.append(f"| {mode} | " + " | ".join(str(v) for v in values) + " |")
+    if meta.get("query_failures"):
+        lines += ["", "Runs that produced no queries:"]
+        lines += [f"- {sid}: {why}" for sid, why in meta["query_failures"].items()]
     if "hybrid" in report["modes"]:
         lines += ["", f"Missed at k={ks[-1]} (hybrid):"]
     for s in report["modes"].get("hybrid", {}).get("scenarios", []):
@@ -173,16 +216,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
     parser.add_argument("--k", type=int, nargs="+", default=list(DEFAULT_KS))
     parser.add_argument("--modes", nargs="+", choices=MODES, default=list(MODES))
-    parser.add_argument("--queries", choices=sorted(QUERY_SOURCES), default="complaint")
+    parser.add_argument("--queries", choices=[*sorted(QUERY_SOURCES), "investigator"],
+                        default="complaint")
+    parser.add_argument("--ids", nargs="+", help="only these scenarios, e.g. S01 S09")
+    # Not LLM_GATEWAY_URL: in .env that is the compose-internal address.
+    parser.add_argument("--gateway", default=os.environ.get("HOST_LLM_GATEWAY_URL") or
+                        DEFAULT_GATEWAY, help="llm-gateway URL for --queries investigator")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--no-write", action="store_true", help="print only")
     args = parser.parse_args(argv)
 
     manifest = read_manifest(args.data)
     retriever = HybridRetriever.load(args.data)
-    report = evaluate(retriever, load_scenarios(args.scenarios), tuple(args.modes),
-                      tuple(sorted(args.k)), manifest["index"]["model"] if manifest else None,
-                      args.queries)
+    scenarios = load_scenarios(args.scenarios)
+    if args.ids:
+        scenarios = [s for s in scenarios if s.id in set(args.ids)]
+    queries = None
+    if args.queries == "investigator":
+        from agent.llm_client import HttpLLMClient
+
+        queries = InvestigatorQueries(retriever, HttpLLMClient(args.gateway))
+    report = evaluate(retriever, scenarios, tuple(args.modes), tuple(sorted(args.k)),
+                      manifest["index"]["model"] if manifest else None, args.queries, queries)
     sys.stdout.write(markdown_summary(report))
     if not args.no_write:
         json_path, md_path = write_reports(report, args.out)

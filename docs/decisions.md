@@ -255,3 +255,31 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
   the image).
 - Cost: the image is larger (onnxruntime, faiss, numpy, plus the model), and the first
   build, including in CI's `docker compose build`, downloads the model.
+
+## D-019 Investigator: a bounded JSON tool loop (rejected: fixed query plan, native function calling, open-ended ReAct)
+
+- `agent/investigator`: `investigate(state, retriever, llm) -> InvestigatorOutput`. Each
+  model turn returns one JSON object. It either asks for tools (searches, clause lookups)
+  or gives the draft. The model chooses every search (requirement A1). There are at most 3
+  turns, normally 2 (search, answer), and the last turn must answer.
+- **Done in code, not by the model:** the working-day delay and its basis (D-009), running
+  the tools, keeping every passage retrieved, and checking citations. Cited ids are
+  normalised, and ids that were never retrieved are dropped and logged, so a draft can only
+  cite retrieved text. An answer before anything is retrieved is sent back once.
+- **Limits:** at most 4 searches and 4 lookups per turn, 5 passages per search. The tool
+  calls count against the run's shared limit (`AGENT_MAX_TOOL_CALLS`) in the graph's
+  retriever wrapper. The wall clock is checked before each model turn.
+- **Errors propagate to the graph, which escalates:** `ToolBudgetExceeded`,
+  `LLMUnavailableError` / `LLMGatewayError`, and `InvestigatorError` (malformed reply, no
+  evidence, time spent). There is no repair call for a malformed reply: at about 4 LLM calls
+  a minute it would cost about 15 s of the run's budget.
+- **Prompt injection:** the complaint is placed inside `<complaint>` tags and treated as
+  data. Tags inside the complaint are removed, so it cannot close its box. The model is
+  told to ignore instructions there.
+- **On a retry,** the Verifier's feedback (strategy, unsupported claims, modifier
+  provisions, previous position) is part of the prompt.
+- Rejected: a **fixed query plan** built from the request fields (A1 requires the agent to
+  choose retrieval). **Provider-native function calling**: llm-gateway exposes plain text
+  completion only, and a JSON protocol keeps the provider swappable by configuration.
+  An **open-ended ReAct loop**: the rate limit and the 75 s budget allow only a few model
+  calls per run.
