@@ -19,15 +19,16 @@ MAX_SEARCHES_PER_TURN = 4
 MAX_LOOKUPS_PER_TURN = 4
 
 
+# Unknown keys from the model are ignored, not fatal: a stray "reason" should not cost a run.
 class SearchRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     query: str = Field(min_length=3, max_length=300)
     doc_ids: list[DocId] | None = None
 
 
 class LookupRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     doc_id: DocId
     clause_id: str = Field(min_length=1, max_length=40)

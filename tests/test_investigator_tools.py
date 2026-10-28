@@ -131,5 +131,4 @@ def test_requests_are_validated():
         SearchRequest(query="valid query", doc_ids=["NOT_A_DOC"])
     with pytest.raises(ValueError):
         SearchRequest(query="ab")
-    with pytest.raises(ValueError):
-        LookupRequest(doc_id=IDBI, clause_id="5.12", extra="x")
+    assert LookupRequest(doc_id=IDBI, clause_id="5.12", reason="x").clause_id == "5.12"
