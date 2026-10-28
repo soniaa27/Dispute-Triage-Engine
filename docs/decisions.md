@@ -231,3 +231,27 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
   status` exits 1 when the output is stale.
 - Files are written to a temporary name and renamed, so an interrupted build leaves the
   previous output intact.
+
+## D-018 The corpus index is built into the worker image (rejected: build at worker start, shared volume)
+
+- `worker/Dockerfile` runs `python -m ingest build` and then `python -m ingest status`, so
+  a build that is not fresh fails the image build. The output goes to `/app/data`: chunks,
+  FAISS index, manifest, and the embedding model in `data/models/`. `HF_HUB_OFFLINE=1` is
+  then set, so a running worker never downloads anything.
+- Every worker replica (`--scale worker=N`) gets the same index, byte for byte. Startup
+  needs no network and no minute-long embedding step, and the image tag pins the corpus
+  version together with the code.
+- The PDFs are now in the Docker build context (`.dockerignore` no longer excludes
+  `corpus/raw/*.pdf`). A local `data/` is still excluded, so the image never ships a
+  developer's build.
+- `EMBED_MODEL` is a compose build arg (default `BAAI/bge-small-en-v1.5`). At query time
+  the retriever uses the model recorded in the manifest, so the index and the queries
+  always use the same model.
+- The ingest layer is placed before `retrieval/`, `agent/` and `worker/` are copied, so
+  editing those does not rebuild the index.
+- Rejected: building at worker start (each replica would spend a minute and need the
+  model download, and replicas could diverge). Also rejected: a shared volume filled by
+  an init container (one more service, and the index would no longer be versioned with
+  the image).
+- Cost: the image is larger (onnxruntime, faiss, numpy, plus the model), and the first
+  build, including in CI's `docker compose build`, downloads the model.

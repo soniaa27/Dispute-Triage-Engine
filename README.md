@@ -10,8 +10,9 @@ citations. The system never issues a credit or closes a dispute; a disputes anal
 
 > **Status: scaffold.** The pipeline runs end to end with a **fake agent**
 > (`agent/runner.py`): fixed 2 s delay, placeholder citations, escalates when the complaint
-> mentions "OTP". Corpus ingestion is done (`python -m ingest build`: clause-level chunks
-> with verified tables). Retrieval, the real agents and observability come next.
+> mentions "OTP". Corpus ingestion and retrieval are done (`python -m ingest build`:
+> clause-level chunks with verified tables, a FAISS index, and a hybrid FAISS + BM25
+> retriever; the worker image builds the index). The real agents and observability come next.
 
 ## Architecture
 
@@ -34,6 +35,10 @@ Requires Docker with Compose v2.
 cp .env.example .env
 docker compose up --build          # wait until all 5 services report healthy
 ```
+
+The first worker build also builds the corpus index inside the image. It downloads the
+embedding model (about 65 MB) and embeds the corpus, which takes a few minutes. Later
+builds reuse that layer until the PDFs, `ingest/` or `EMBED_MODEL` change.
 
 Then open http://localhost:8000 for the web client, or http://localhost:8000/docs for the API.
 
@@ -141,6 +146,7 @@ Other CLIs:
 ```bash
 python -m ingest build              # or make ingest: corpus/raw/ -> data/chunks.jsonl + manifest
 python -m ingest status             # or make ingest-status: is data/ fresh? (exit 1 if not)
+python -m retrieval.evaluate        # or make retrieval-eval: recall@k / MRR on the scenarios
 python scripts/hash_corpus.py       # SHA-256 of files in corpus/raw/
 ```
 
@@ -162,6 +168,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `web/` | Static HTML + vanilla JS client | Person B |
 | `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
 | `ingest/` | Corpus pipeline: PDF text, clause chunking, verified tables, build manifest | Person A |
+| `retrieval/` | `HybridRetriever`: dense (FAISS) + keyword (BM25) search, clause lookup | Person A |
 | `eval/` | 24 scenarios, validator, batch runner, metrics, report compare | Person A |
 | `corpus/` | Source PDFs in `raw/`, provenance table in README | Person A |
 | `observability/` | Prometheus / Grafana / Jaeger config (placeholder) | Person B |

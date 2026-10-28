@@ -6,7 +6,7 @@ LLM_GATEWAY_HOST_PORT ?= 8100
 HOST_LLM_GATEWAY_URL ?= http://localhost:$(LLM_GATEWAY_HOST_PORT)
 
 .PHONY: help env venv up down logs ps test lint schema scale smoke clean eval eval-validate eval-compare \
-	llm-live-test llm-breaker-demo llm-breaker llm-cost-report ingest ingest-status
+	llm-live-test llm-breaker-demo llm-breaker llm-cost-report ingest ingest-status retrieval-eval
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -52,6 +52,9 @@ ingest: ## parse and chunk corpus/raw/ into data/ (skips if fresh; ARGS="--force
 
 ingest-status: ## is data/ up to date with corpus/raw/ and the ingest code? (exit 1 if not)
 	$(PY) -m ingest status
+
+retrieval-eval: ## recall@k / MRR of the retriever on the scenarios (needs make ingest; ARGS="--k 3 5")
+	$(PY) -m retrieval.evaluate $(ARGS)
 
 eval-validate: ## check scenarios: contract, working days, clause ids, verbatim passages, coverage
 	$(PY) -m eval.validate

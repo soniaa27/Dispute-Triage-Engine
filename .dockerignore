@@ -7,8 +7,8 @@ venv
 .pytest_cache
 .ruff_cache
 .env
+# Built inside the worker image from corpus/raw/ (D-018); a local data/ is never copied.
 data
-corpus/raw/*.pdf
 docs
 tests
 loadtest

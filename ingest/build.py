@@ -1,9 +1,9 @@
-"""Build step: corpus/raw/*.pdf -> data/chunks.jsonl + data/manifest.json.
+"""Build step: corpus/raw/*.pdf -> data/chunks.jsonl + data/index/ + data/manifest.json.
 
-Idempotent: a build is skipped when the manifest records the same source SHA-256s and the
-same pipeline hash (the ingest code and pypdf version) and the chunks file is present.
-The manifest is the freshness record: when it was built, from which bytes, how many chunks,
-and how long each stage took.
+Idempotent: a build is skipped when the manifest records the same source SHA-256s, the
+same pipeline hash (the ingest code and pypdf version) and the same embedding model, and
+the chunks and index files are present. The manifest is the freshness record: when it was
+built, from which bytes, how many chunks, which model, and how long each stage took.
 """
 
 import hashlib
@@ -21,13 +21,16 @@ import structlog
 from contracts.agent import DocId
 from ingest.chunks import Chunk
 from ingest.documents import chunk_corpus
+from ingest.embed import Embedder, FastEmbedder, embed_model_name
+from ingest.index import IDS_FILE, VECTORS_FILE, build_index
 from ingest.pdf import DOC_FILES, RAW_DIR, load_corpus
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 CHUNKS_FILE = "chunks.jsonl"
+INDEX_DIR = "index"
 MANIFEST_FILE = "manifest.json"
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 PROVENANCE_README = ROOT / "corpus" / "README.md"
 
 log = structlog.get_logger("ingest")
@@ -69,14 +72,20 @@ def read_manifest(out_dir: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def stale_reasons(out_dir: Path, raw_dir: Path = RAW_DIR) -> list[str]:
-    """Why the built output does not match the current sources and code; [] if fresh."""
+def stale_reasons(out_dir: Path, raw_dir: Path = RAW_DIR,
+                  model_name: str | None = None) -> list[str]:
+    """Why the built output does not match the current sources, code and embedding model
+    (`model_name`, default EMBED_MODEL); [] if fresh."""
     manifest = read_manifest(out_dir)
     if manifest is None:
         return ["no manifest"]
     reasons = []
-    if not (out_dir / CHUNKS_FILE).is_file():
-        reasons.append(f"{CHUNKS_FILE} missing")
+    for path in (out_dir / CHUNKS_FILE, out_dir / INDEX_DIR / VECTORS_FILE,
+                 out_dir / INDEX_DIR / IDS_FILE):
+        if not path.is_file():
+            reasons.append(f"{path.relative_to(out_dir).as_posix()} missing")
+    if manifest.get("index", {}).get("model") != (model_name or embed_model_name()):
+        reasons.append("embedding model changed")
     if manifest.get("manifest_version") != MANIFEST_VERSION:
         reasons.append("manifest version changed")
     if manifest.get("pipeline_sha256") != pipeline_hash():
@@ -100,9 +109,13 @@ def load_chunks(out_dir: Path = DATA_DIR) -> list[Chunk]:
 
 
 def build(raw_dir: Path = RAW_DIR, out_dir: Path = DATA_DIR, *, force: bool = False,
-          readme: Path = PROVENANCE_README) -> dict[str, Any]:
-    """Run the pipeline unless the output is fresh. Returns the manifest in effect."""
-    if not force and not (reasons := stale_reasons(out_dir, raw_dir)):
+          readme: Path = PROVENANCE_README, embedder: Embedder | None = None) -> dict[str, Any]:
+    """Run the pipeline unless the output is fresh. Returns the manifest in effect.
+
+    `embedder` defaults to FastEmbedder(EMBED_MODEL), loaded only if a build is needed.
+    """
+    model_name = embedder.model_name if embedder else embed_model_name()
+    if not force and not (reasons := stale_reasons(out_dir, raw_dir, model_name)):
         manifest = read_manifest(out_dir)
         log.info("ingest_up_to_date", built_at=manifest["built_at"],
                  chunks=manifest["chunks"]["total"])
@@ -125,6 +138,8 @@ def build(raw_dir: Path = RAW_DIR, out_dir: Path = DATA_DIR, *, force: bool = Fa
     out_dir.mkdir(parents=True, exist_ok=True)
     _write_atomic(out_dir / CHUNKS_FILE,
                   "".join(chunk.model_dump_json() + "\n" for chunk in chunks))
+    index = build_index(chunks, embedder or FastEmbedder(model_name), out_dir / INDEX_DIR)
+    indexed = time.perf_counter()
     pages = sum(len(p) for p in corpus.values())
     total_s = time.perf_counter() - started
     manifest = {
@@ -147,9 +162,11 @@ def build(raw_dir: Path = RAW_DIR, out_dir: Path = DATA_DIR, *, force: bool = Fa
             "by_kind": {k: sum(c.kind == k for c in chunks)
                         for k in ("clause", "note", "table", "table_row")},
         },
+        "index": index,
         "timings_s": {
             "extract": round(extracted - started, 3),
             "chunk": round(chunked - extracted, 3),
+            "index": round(indexed - chunked, 3),
             "total": round(total_s, 3),
         },
         "throughput": {
