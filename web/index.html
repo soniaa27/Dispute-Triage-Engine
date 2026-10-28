@@ -1,70 +1,188 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-IN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dispute Triage</title>
-  <style>
-    body { font-family: system-ui, sans-serif; max-width: 860px; margin: 1.5rem auto; padding: 0 1rem; }
-    fieldset { margin-bottom: 1rem; }
-    label { display: block; margin: .4rem 0; }
-    input, select, textarea { width: 100%; box-sizing: border-box; padding: .3rem; }
-    textarea { min-height: 6rem; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
-    .claims label { display: inline-block; margin-right: 1rem; width: auto; }
-    .claims select { width: auto; }
-    pre { background: #f4f4f4; padding: .6rem; overflow-x: auto; white-space: pre-wrap; }
-    .error { color: #a00; }
-    .escalated { color: #a60; font-weight: bold; }
-    blockquote { margin: .3rem 0 .8rem; padding-left: .8rem; border-left: 3px solid #ccc; }
-  </style>
+  <title>Dispute Triage Service</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css?v=2">
 </head>
 <body>
-  <h1>Card Dispute Triage</h1>
-  <p>Submits a dispute and shows the recommendation. The system never issues a credit; an analyst decides.</p>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <form id="dispute-form">
-    <fieldset>
-      <legend>Dispute</legend>
-      <div class="row">
-        <label>Customer ID <input name="customer_id" value="CUST-000123" required></label>
-        <label>Transaction ID <input name="transaction_id" value="TXN-2026-000001" required></label>
-        <label>Account type
-          <select name="account_type">
-            <option>BSBD</option><option selected>SAVINGS</option><option>CURRENT_MSME</option>
-            <option>CURRENT_INDIVIDUAL_UPTO_25L</option><option>CURRENT_OTHER</option>
-            <option>CREDIT_CARD_UPTO_5L</option><option>CREDIT_CARD_ABOVE_5L</option><option>PREPAID</option>
-          </select>
-        </label>
-        <label>Channel
-          <select name="channel">
-            <option>CARD_PRESENT</option><option selected>CARD_NOT_PRESENT</option><option>UPI</option>
-            <option>NET_BANKING</option><option>MOBILE_BANKING</option><option>ATM</option>
-          </select>
-        </label>
-        <label>Amount (INR) <input name="transaction_amount_inr" type="number" step="0.01" value="4999"></label>
-        <label>Home branch state <input name="home_branch_state" value="Karnataka"></label>
-        <label>Transaction time <input name="transaction_datetime" type="datetime-local" required></label>
-        <label>Bank alert time (optional) <input name="bank_alert_datetime" type="datetime-local"></label>
-        <label>Reported time <input name="reported_datetime" type="datetime-local" required></label>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+          <rect width="32" height="32" rx="6"/>
+          <path d="M9 11h14M9 16h14M9 21h9" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1 class="brand__title">Dispute Triage Service</h1>
+          <p class="brand__subtitle">Card and UPI disputes: intake, liability recommendation and cited provisions</p>
+        </div>
       </div>
-      <label>Complaint
-        <textarea name="complaint_text">An online purchase I did not make appeared on my card statement.</textarea>
-      </label>
-      <div class="claims">
-        Customer claims:
-        <label>Shared OTP/PIN <select name="shared_otp_or_pin"><option value="">not stated</option><option>true</option><option>false</option></select></label>
-        <label>Card in possession <select name="card_in_possession"><option value="">not stated</option><option>true</option><option>false</option></select></label>
-        <label>Received alert <select name="received_alert"><option value="">not stated</option><option>true</option><option>false</option></select></label>
+      <div class="health" id="health" role="status" aria-live="polite">
+        <span class="health__dot" aria-hidden="true"></span>
+        <span class="health__text">Checking service…</span>
       </div>
-    </fieldset>
-    <button type="submit">Submit dispute</button>
-  </form>
+    </div>
+    <div class="notice" role="note">
+      <div class="notice__inner">
+        <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.25"/><path d="M10 9v5M10 6.2v.1"/></svg>
+        <span>Recommendations only. A disputes analyst makes the final decision.</span>
+      </div>
+    </div>
+  </header>
 
-  <h2>Result</h2>
-  <div id="status">No run yet.</div>
-  <div id="result"></div>
+  <main id="main" class="layout">
+    <!-- Left: the dispute form -->
+    <section class="panel panel--form" aria-labelledby="form-title">
+      <div class="panel__head">
+        <div>
+          <h2 id="form-title" class="panel__title">New dispute</h2>
+          <p class="panel__lead">Fields marked <span class="req" aria-hidden="true">*</span><span class="visually-hidden">with an asterisk</span> are required.</p>
+        </div>
+        <div class="example-picker">
+          <label for="example-select">Load example</label>
+          <select id="example-select">
+            <option value="">Choose a case…</option>
+          </select>
+        </div>
+      </div>
 
-  <script src="app.js"></script>
+      <div id="form-summary" class="summary" tabindex="-1" hidden></div>
+
+      <form id="dispute-form" novalidate>
+        <fieldset class="group">
+          <legend class="group__title">Customer and account</legend>
+          <div class="grid">
+            <div class="field" data-field="customer_id">
+              <label for="customer_id">Customer ID <span class="req" aria-hidden="true">*</span></label>
+              <input id="customer_id" name="customer_id" autocomplete="off" spellcheck="false" placeholder="e.g. CUST-100201" required aria-describedby="customer_id-hint customer_id-error">
+              <p class="hint" id="customer_id-hint">3–32 letters, digits, hyphens or underscores.</p>
+              <p class="field-error" id="customer_id-error"></p>
+            </div>
+            <div class="field" data-field="account_type">
+              <label for="account_type">Account type <span class="req" aria-hidden="true">*</span></label>
+              <select id="account_type" name="account_type" required aria-describedby="account_type-error"></select>
+              <p class="field-error" id="account_type-error"></p>
+            </div>
+            <div class="field field--wide" data-field="home_branch_state">
+              <label for="home_branch_state">Home branch state or UT <span class="req" aria-hidden="true">*</span></label>
+              <input id="home_branch_state" name="home_branch_state" list="states" autocomplete="off" placeholder="e.g. Karnataka" required aria-describedby="home_branch_state-hint home_branch_state-error">
+              <datalist id="states"></datalist>
+              <p class="hint" id="home_branch_state-hint">Sets the working-day calendar used for the reporting delay.</p>
+              <p class="field-error" id="home_branch_state-error"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="group__title">Transaction</legend>
+          <div class="grid">
+            <div class="field" data-field="transaction_id">
+              <label for="transaction_id">Transaction ID <span class="req" aria-hidden="true">*</span></label>
+              <input id="transaction_id" name="transaction_id" autocomplete="off" spellcheck="false" placeholder="e.g. TXN-2026-090801" required aria-describedby="transaction_id-error">
+              <p class="field-error" id="transaction_id-error"></p>
+            </div>
+            <div class="field" data-field="channel">
+              <label for="channel">Channel <span class="req" aria-hidden="true">*</span></label>
+              <select id="channel" name="channel" required aria-describedby="channel-error"></select>
+              <p class="field-error" id="channel-error"></p>
+            </div>
+            <div class="field" data-field="transaction_amount_inr">
+              <label for="transaction_amount_inr">Disputed amount <span class="req" aria-hidden="true">*</span></label>
+              <div class="affix">
+                <span class="affix__text" aria-hidden="true">₹</span>
+                <input id="transaction_amount_inr" name="transaction_amount_inr" type="number" inputmode="decimal" min="0.01" max="10000000" step="0.01" placeholder="0.00" required aria-describedby="transaction_amount_inr-hint transaction_amount_inr-error">
+              </div>
+              <p class="hint" id="transaction_amount_inr-hint">In rupees. More than ₹0, up to ₹1,00,00,000.</p>
+              <p class="field-error" id="transaction_amount_inr-error"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="group__title">Timeline</legend>
+          <p class="group__lead">All times are Indian Standard Time (UTC+05:30).</p>
+          <div class="grid grid--3">
+            <div class="field" data-field="transaction_datetime">
+              <label for="transaction_datetime">Transaction time <span class="req" aria-hidden="true">*</span></label>
+              <input id="transaction_datetime" name="transaction_datetime" type="datetime-local" required aria-describedby="transaction_datetime-error">
+              <p class="field-error" id="transaction_datetime-error"></p>
+            </div>
+            <div class="field" data-field="bank_alert_datetime">
+              <label for="bank_alert_datetime">Bank alert time <span class="optional">optional</span></label>
+              <input id="bank_alert_datetime" name="bank_alert_datetime" type="datetime-local" aria-describedby="bank_alert_datetime-hint bank_alert_datetime-error">
+              <p class="hint" id="bank_alert_datetime-hint">When the SMS or email alert was sent.</p>
+              <p class="field-error" id="bank_alert_datetime-error"></p>
+            </div>
+            <div class="field" data-field="reported_datetime">
+              <label for="reported_datetime">Reported time <span class="req" aria-hidden="true">*</span></label>
+              <input id="reported_datetime" name="reported_datetime" type="datetime-local" required aria-describedby="reported_datetime-error">
+              <p class="field-error" id="reported_datetime-error"></p>
+            </div>
+          </div>
+          <p class="gap-hint" id="gap-hint" aria-live="polite"></p>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="group__title">Complaint</legend>
+          <div class="field" data-field="complaint_text">
+            <label for="complaint_text">Customer's account of what happened <span class="req" aria-hidden="true">*</span></label>
+            <textarea id="complaint_text" name="complaint_text" rows="5" maxlength="4000" required aria-describedby="complaint-counter complaint_text-error"></textarea>
+            <div class="counter" id="complaint-counter" aria-live="polite"></div>
+            <p class="field-error" id="complaint_text-error"></p>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend class="group__title">Customer statements</legend>
+          <p class="group__lead">What the customer says. Leave as “Not stated” if they did not say.</p>
+          <div class="claims" id="claims"></div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="submit-btn">Submit dispute</button>
+          <button type="button" class="btn btn--secondary" id="reset-btn">Reset</button>
+          <span class="actions__note" id="submit-note" aria-live="polite"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- Right: result, recent runs, rejected requests -->
+    <section class="panel panel--side" aria-label="Results">
+      <div class="tabs" role="tablist" aria-label="Result views">
+        <button class="tab" role="tab" id="tab-result" aria-controls="view-result" aria-selected="true">Result</button>
+        <button class="tab" role="tab" id="tab-recent" aria-controls="view-recent" aria-selected="false" tabindex="-1">Recent runs <span class="tab__count" id="recent-count"></span></button>
+        <button class="tab" role="tab" id="tab-rejected" aria-controls="view-rejected" aria-selected="false" tabindex="-1">Rejected requests</button>
+      </div>
+
+      <div class="view" role="tabpanel" id="view-result" aria-labelledby="tab-result" tabindex="0">
+        <div id="result"></div>
+      </div>
+
+      <div class="view" role="tabpanel" id="view-recent" aria-labelledby="tab-recent" tabindex="0" hidden>
+        <div class="view__head">
+          <p class="view__lead">Runs submitted from this browser. Select one to show its result.</p>
+          <button type="button" class="btn btn--quiet btn--small" id="recent-clear">Clear list</button>
+        </div>
+        <ul class="run-list" id="recent-list"></ul>
+      </div>
+
+      <div class="view" role="tabpanel" id="view-rejected" aria-labelledby="tab-rejected" tabindex="0" hidden>
+        <div class="view__head">
+          <p class="view__lead">Requests that failed the data contract. They were quarantined and no run was started.</p>
+          <button type="button" class="btn btn--quiet btn--small" id="rejected-refresh">Refresh</button>
+        </div>
+        <div id="rejected-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="visually-hidden" id="announcer" aria-live="polite"></div>
+  <noscript><p class="callout tone-danger" style="margin:16px">This page needs JavaScript.</p></noscript>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
