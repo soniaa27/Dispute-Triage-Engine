@@ -2,6 +2,11 @@
 
 Checks every scenario against the data contract, the working-day rule, the clause ID
 conventions and the corpus text, then checks coverage. Exits non-zero on any failure.
+
+When the chunk output exists (make ingest), also checks every supporting clause against it:
+each must exist as a chunk, and the supporting_passage must be in the first one's text (for a
+table row, whose chunk is relabelled by column, every number in the passage must be). Without
+the chunk output these checks are skipped with a warning.
 """
 
 import argparse
@@ -13,6 +18,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from contracts import FraudType, Route
+from eval.chunks import ChunkIndex, ChunksMissingError, load_chunk_index
 from eval.corpus import (
     clause_id_valid,
     load_corpus_text,
@@ -34,6 +40,7 @@ class ValidationReport:
     per_category: Counter = field(default_factory=Counter)
     per_route: Counter = field(default_factory=Counter)
     per_fraud_type: Counter = field(default_factory=Counter)
+    warnings: list[str] = field(default_factory=list)
     total: int = 0
 
     @property
@@ -41,7 +48,25 @@ class ValidationReport:
         return not self.coverage_errors and not any(self.errors.values())
 
 
-def check_scenario(scenario: Scenario, corpus) -> list[str]:
+def check_against_chunks(scenario: Scenario, chunks: ChunkIndex) -> list[str]:
+    """The answer key against the retrievable text: what a correct citation can quote."""
+    exp = scenario.expected
+    errors = [f"supporting clause {cid} has no chunk (make ingest output)"
+              for cid in exp.supporting_clauses if cid not in chunks]
+    primary = exp.supporting_clauses[0]
+    clause = chunks.get(primary)
+    if clause is None or chunks.contains_span(primary, exp.supporting_passage):
+        return errors
+    if clause.kind == "table_row":
+        missing = chunks.missing_key_values(primary, exp.supporting_passage)
+        if missing:
+            errors.append(f"supporting_passage values {missing} not in table row chunk {primary}")
+    else:
+        errors.append(f"supporting_passage not found in chunk {primary}")
+    return errors
+
+
+def check_scenario(scenario: Scenario, corpus, chunks: ChunkIndex | None = None) -> list[str]:
     """Content checks for one already-parsed scenario. Returns error messages."""
     errors = []
     exp = scenario.expected
@@ -70,11 +95,17 @@ def check_scenario(scenario: Scenario, corpus) -> list[str]:
     overlap = set(exp.supporting_clauses) & set(exp.must_not_cite)
     if overlap:
         errors.append(f"clauses both supporting and must_not_cite: {sorted(overlap)}")
+    if chunks is not None:
+        errors += check_against_chunks(scenario, chunks)
     return errors
 
 
-def validate(raw_scenarios: list[dict], corpus) -> ValidationReport:
+def validate(raw_scenarios: list[dict], corpus, chunks: ChunkIndex | None = None
+             ) -> ValidationReport:
+    """`chunks=None` skips the chunk checks (with a warning in the report)."""
     report = ValidationReport(total=len(raw_scenarios))
+    if chunks is None:
+        report.warnings.append("chunk output not found; chunk checks skipped (run make ingest)")
     seen: set[str] = set()
     for index, raw in enumerate(raw_scenarios, start=1):
         key = raw.get("id") or f"line {index}"
@@ -85,7 +116,7 @@ def validate(raw_scenarios: list[dict], corpus) -> ValidationReport:
                 f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()
             ]
             continue
-        errors = check_scenario(scenario, corpus)
+        errors = check_scenario(scenario, corpus, chunks)
         if scenario.id in seen:
             errors.append("duplicate id")
         seen.add(scenario.id)
@@ -122,6 +153,8 @@ def print_report(report: ValidationReport) -> None:
         print(f"  per {title}: " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
     for err in report.coverage_errors:
         print(f"COVERAGE FAIL: {err}")
+    for warning in report.warnings:
+        print(f"WARNING: {warning}")
     print("\nVALID" if report.ok else "\nINVALID")
 
 
@@ -129,7 +162,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m eval.validate", description=__doc__)
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS)
     args = parser.parse_args(argv)
-    report = validate(load_raw(args.scenarios), load_corpus_text())
+    try:
+        chunks = load_chunk_index()
+    except ChunksMissingError:
+        chunks = None
+    report = validate(load_raw(args.scenarios), load_corpus_text(), chunks)
     print_report(report)
     return 0 if report.ok else 1
 

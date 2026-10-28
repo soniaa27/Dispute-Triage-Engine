@@ -142,5 +142,16 @@ def test_protocols_are_structural():
         def get_clause(self, doc_id, clause_id):
             return None
 
+        def related(self, doc_id, clause_id):
+            return []
+
+    class SearchOnly:  # a retriever without related() no longer satisfies the protocol
+        def search_corpus(self, query, k=5, doc_ids=None):
+            return []
+
+        def get_clause(self, doc_id, clause_id):
+            return None
+
     assert isinstance(Lookup(), Retriever)
+    assert not isinstance(SearchOnly(), Retriever)
     assert not isinstance(Lookup(), LLMClient)

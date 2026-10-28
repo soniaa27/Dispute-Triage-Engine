@@ -7,9 +7,15 @@ Deterministic (computed on every run):
   escalation_precision      = TP / (TP + FP)   predicted escalate = returned route is escalate
   escalation_recall         = TP / (TP + FN)   positive = expected.must_escalate
   fraud_type_accuracy       = #(fraud_type == expected.fraud_type) / N
-  citation_resolution_rate  = #(citations whose text is verbatim in their doc_id's PDF)
-                              / #(citations returned)
+  citation_resolution_rate  = #(citations that resolve to retrieved text) / #(citations returned)
+                              A citation resolves when its clause_id has a chunk in data/ and
+                              its text is a verbatim span of that chunk's text, at most 60 words
+                              (eval/chunks.py, "Citation rules" in docs/interfaces.md). Each
+                              failing citation records unknown_clause, too_long or
+                              text_not_in_chunk.
   citation_hallucination_rate = 1 - citation_resolution_rate
+  pdf_verbatim_rate         = #(citations whose text is verbatim in their doc_id's PDF)
+                              / #(citations returned). Informational only, not used for scoring.
   supporting_clause_recall  = #(expected supporting_clauses found among returned citation ids)
                               / #(expected supporting_clauses)          (micro-average)
   must_not_cite_violations  = #(returned citation ids listed in must_not_cite)
@@ -33,11 +39,13 @@ answer, only what the agent returned and the passages it cited.
 """
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
 from contracts import Route, RunResult
 from contracts.llm import LLMClient, LLMUnavailableError
+from eval.chunks import ChunkIndex
 from eval.corpus import base_citation_id, missing_terms, text_in_document
 from eval.schema import Category, Scenario
 
@@ -90,14 +98,33 @@ def fraud_type_accuracy(runs: list[ScenarioRun]) -> float | None:
     return _ratio(correct, len(runs))
 
 
-def citation_resolution(runs: list[ScenarioRun], corpus) -> tuple[int, int]:
+def citation_failures(result: RunResult | None, chunks: ChunkIndex) -> list[dict[str, str]]:
+    """[{"citation": "DOC_ID:clause_id", "reason": ...}] for each citation that does not resolve
+    to chunk text."""
+    failures = []
+    for citation in result.citations if result else []:
+        reason = chunks.check_citation(citation.doc_id, citation.clause_id, citation.text)
+        if reason:
+            failures.append({"citation": f"{citation.doc_id}:{citation.clause_id}",
+                             "reason": str(reason)})
+    return failures
+
+
+def citation_resolution(runs: list[ScenarioRun], chunks: ChunkIndex) -> tuple[int, int]:
     """(resolved, total) over all citations returned in all runs."""
-    resolved = total = 0
+    total = sum(len(run.result.citations) for run in runs if run.result)
+    failed = sum(len(citation_failures(run.result, chunks)) for run in runs)
+    return total - failed, total
+
+
+def pdf_verbatim(runs: list[ScenarioRun], corpus) -> tuple[int, int]:
+    """(verbatim in the PDF, total) over all citations. Informational, not scored."""
+    found = total = 0
     for run in runs:
         for citation in run.result.citations if run.result else []:
             total += 1
-            resolved += text_in_document(citation.text, citation.doc_id, corpus)
-    return resolved, total
+            found += text_in_document(citation.text, citation.doc_id, corpus)
+    return found, total
 
 
 def supporting_clause_recall(runs: list[ScenarioRun]) -> float | None:
@@ -140,10 +167,12 @@ def basis_mention_rate(runs: list[ScenarioRun]) -> float | None:
     return _ratio(sum(not basis_missing_terms(r) for r in checked), len(checked))
 
 
-def deterministic_metrics(runs: list[ScenarioRun], corpus) -> dict[str, Any]:
+def deterministic_metrics(runs: list[ScenarioRun], chunks: ChunkIndex, corpus) -> dict[str, Any]:
     precision, recall = escalation_precision_recall(runs)
-    resolved, total = citation_resolution(runs, corpus)
+    resolved, total = citation_resolution(runs, chunks)
     resolution_rate = _ratio(resolved, total)
+    reasons = Counter(f["reason"] for run in runs for f in citation_failures(run.result, chunks))
+    in_pdf, _ = pdf_verbatim(runs, corpus)
     violations = must_not_cite_violations(runs)
     return {
         "route_accuracy": route_accuracy(runs),
@@ -155,6 +184,8 @@ def deterministic_metrics(runs: list[ScenarioRun], corpus) -> dict[str, Any]:
             None if resolution_rate is None else round(1 - resolution_rate, 4)
         ),
         "citations_returned": total,
+        "citation_failures_by_reason": dict(sorted(reasons.items())),
+        "pdf_verbatim_rate": _ratio(in_pdf, total),
         "supporting_clause_recall": supporting_clause_recall(runs),
         "must_not_cite_violations": sum(len(v) for v in violations.values()),
         "must_not_cite_violations_by_scenario": violations,

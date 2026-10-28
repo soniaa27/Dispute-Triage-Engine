@@ -256,7 +256,26 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
 - Cost: the image is larger (onnxruntime, faiss, numpy, plus the model), and the first
   build, including in CI's `docker compose build`, downloads the model.
 
-## D-019 Investigator: a bounded JSON tool loop (rejected: fixed query plan, native function calling, open-ended ReAct)
+## D-019 `related()` is part of the Retriever protocol (rejected: agents call HybridRetriever, merge definitions into chunks)
+
+- **Problem:** a table row is only half the rule. IDBI Table-I rows depend on "Number of
+  Days" (5.13) and "Third Party Breach" (5.20), and Table-II row 03 on "Negligence of
+  Customer" (5.12); these definitions sit pages away from the tables, so a search for the
+  row rarely returns them. Ingest records the links in chunk metadata (D-016), but only
+  `HybridRetriever.related()` exposed them.
+- **Chosen:** `related(doc_id, clause_id) -> list[str]` is in `contracts.tools.Retriever`,
+  next to `search_corpus` and `get_clause`. Both agents reach linked clauses through the
+  shared interface, so they can be tested against any implementation, and every call goes
+  through the graph's wrapper: counted against `AGENT_MAX_TOOL_CALLS` and traced.
+- **Rejected: agents call `HybridRetriever.related()` directly.** That ties agents to one
+  implementation and bypasses tool-call counting and tracing.
+- **Rejected: merge definitions into table chunks.** A citation must name exactly one
+  clause and `get_clause` must return exactly that clause (docs/interfaces.md, rules for
+  the chunker); merged text would break both.
+- **Returns ids, not passages:** the agent decides which links to read with `get_clause`,
+  each read counted as one tool call.
+
+## D-020 Investigator: a bounded JSON tool loop (rejected: fixed query plan, native function calling, open-ended ReAct)
 
 - `agent/investigator`: `investigate(state, retriever, llm) -> InvestigatorOutput`. Each
   model turn returns one JSON object. It either asks for tools (searches, clause lookups)

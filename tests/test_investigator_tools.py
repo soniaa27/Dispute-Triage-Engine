@@ -72,6 +72,10 @@ class FakeRetriever:
         self.calls.append(("get_clause", doc_id, clause_id))
         return self.clauses.get(f"{doc_id}:{clause_id}")
 
+    def related(self, doc_id, clause_id):
+        self.calls.append(("related", doc_id, clause_id))
+        return []
+
 
 def test_fake_retriever_fits_the_contract():
     assert isinstance(FakeRetriever({}, []), Retriever)

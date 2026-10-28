@@ -20,7 +20,7 @@ import faiss
 
 from contracts.agent import CITATION_SEPARATOR, DocId, Passage
 from ingest.build import DATA_DIR, INDEX_DIR, load_chunks, read_manifest
-from ingest.chunks import Chunk
+from ingest.chunks import PART_SEPARATOR, Chunk
 from ingest.embed import Embedder, FastEmbedder
 from ingest.index import embedding_text, load_index, search
 from retrieval.bm25 import BM25
@@ -116,10 +116,14 @@ class HybridRetriever:
 
     def related(self, doc_id: DocId, clause_id: str) -> list[str]:
         """Linked clauses ("DOC_ID:clause_id") recorded at ingest, e.g. a table row's
-        definitions. [] for unknown ids."""
+        definitions; see contracts.tools.Retriever.related for the contract. A split
+        clause's base id gets the links of all its parts."""
         try:
             key = _key(doc_id, clause_id)
         except ValueError:
             return []
-        chunk = self._by_id.get(key) or next(iter(self._parts.get(key, [])), None)
-        return list(chunk.related) if chunk else []
+        chunks = [self._by_id[key]] if key in self._by_id else self._parts.get(key, [])
+        links = (link for chunk in chunks for link in chunk.related)
+        own = key.split(PART_SEPARATOR, 1)[0]  # "5#2" and "5" are the same clause
+        return [link for link in dict.fromkeys(links)
+                if link.split(PART_SEPARATOR, 1)[0] != own]

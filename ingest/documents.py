@@ -298,7 +298,16 @@ IOS_LAYOUT = DocLayout(
         _re(r"\d Centralised Receipt and Processing Centre, 4th Floor.*"),
         _re(r"Vista, Chandigarh.*"),
     ],
-    headings=[_re(r"CHAPTER [IVX]+"), _re(r"[A-Z][A-Z0-9 ,/–-]+"), _re(r"Annex")],
+    headings=[
+        _re(r"CHAPTER [IVX]+"), _re(r"[A-Z][A-Z0-9 ,/–-]+"), _re(r"Annex"),
+        # Annex Part A subheadings (mixed case, so the all-caps pattern misses them).
+        _re(r"Time limits for filing a complaint"),
+        _re(r"Using the services of an advocate for filing of a complaint"),
+        _re(r"Amount of compensation admissible under the Scheme"),
+        _re(r"Documents needed for filing a complaint"),
+        _re(r"Where / how to file a complaint"),
+        _re(r"Where / how to get further information"),
+    ],
     regions=[Region(_re(r"Part B: FORM OF COMPLAINT"))],  # the complaint form, not provisions
     zones=[(_re(r"Part A: Guidance for filing of a complaint"), [
         Level(_re(r"(?P<n>\d)\.\s+(?P<rest>.*)"), "number", lambda _, n: f"Annex-A.{n}"),

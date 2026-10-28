@@ -28,4 +28,4 @@ escaping. A file's `version:` must equal its file name; a test checks this.
 
 | Version | Agents | Notes |
 |---------|--------|-------|
-| `v1` | investigator | Baseline tool loop: search / answer JSON, delay given as a fact (D-019) |
+| `v1` | investigator | Baseline tool loop: search / answer JSON, delay given as a fact (D-020) |

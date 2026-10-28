@@ -108,11 +108,28 @@ agent; the real agents must implement it.
 ## Retriever (`contracts/tools.py`)
 
 - **What:** a `Protocol` with
-  `search_corpus(query, k=5, doc_ids=None) -> list[Passage]` (best first) and
-  `get_clause(doc_id, clause_id) -> Passage | None` (exact lookup).
-- **Implements:** Person 1, over the FAISS/Chroma index built by `python -m ingest build`.
-- **Calls:** both agents. The Investigator searches. The Verifier uses `get_clause` to
-  re-read cited clauses and `search_corpus` to look for modifying provisions.
+  `search_corpus(query, k=5, doc_ids=None) -> list[Passage]` (best first),
+  `get_clause(doc_id, clause_id) -> Passage | None` (exact lookup) and
+  `related(doc_id, clause_id) -> list[str]` (linked clauses).
+- **`related` contract:** the clauses linked to this one at ingest, such as the definitions
+  a table row depends on, as citation ids `DOC_ID:clause_id` (a link may point to another
+  document), each resolvable with `get_clause`. Stable order (as recorded at ingest), no
+  duplicates, never the clause itself. A split clause's base id (`RBI_2017_CIRCULAR:5`)
+  returns the links of all its parts. Returns `[]` and never raises for an unknown id, a
+  heading-only parent (`IDBI_POLICY:5`) or a clause with no links. Links run both ways, so
+  a definition also lists the table it qualifies.
+  Example: `related("IDBI_POLICY", "Table-I.03")` →
+  `["IDBI_POLICY:5.13", "IDBI_POLICY:5.20"]`.
+- **Implements:** `retrieval.HybridRetriever`, over the FAISS index and chunks built by
+  `python -m ingest build`. Agents depend on the `Retriever` protocol, never on
+  `HybridRetriever` directly.
+- **Calls:** both agents. The Investigator searches and fetches the definitions a table
+  row depends on with `related`. The Verifier uses `get_clause` to re-read cited clauses,
+  `related` to check the definitions they rely on, and `search_corpus` to look for
+  modifying provisions.
+- **Counting:** the graph wraps the retriever, and every call to `search_corpus`,
+  `get_clause` or `related` counts as one tool call (limit `AGENT_MAX_TOOL_CALLS`) and is
+  logged to the trace.
 
 ## Investigator (`agent/investigator`)
 
@@ -132,7 +149,7 @@ agent; the real agents must implement it.
   `agent.investigator.InvestigatorError` (malformed reply, no evidence, or wall-clock
   budget spent before a turn). `str(exc)` is a usable escalation reason.
 - **Cost:** 2 LLM calls normally, 3 at most (`step="investigator"`), and about 2 to 8 tool
-  calls. Design: [decisions.md](decisions.md) D-019.
+  calls. Design: [decisions.md](decisions.md) D-020.
 
 ## compute_working_days (`contracts/tools.py`)
 
@@ -210,3 +227,30 @@ Numbered clauses with bracketed sub-clauses and lettered items.
   merging text, so `get_clause` still returns exactly the defined clause.
 - `page` is the 1-based PDF page index, not the number printed on the page. The IDBI PDF's
   printed numbers are offset by 2.
+
+## Citation rules
+
+A citation (`contracts.Citation`) is `DOC_ID:clause_id` plus `text`. The evaluation checks
+it against the chunk the retriever returns, not the raw PDF (requirement A3: every citation
+resolves to retrieved text). Code: `eval/chunks.py`; metric: `citation_resolution_rate`.
+
+- **`text` is a short verbatim span copied from that chunk's `text`**, at most 60 words.
+  Copy it, do not paraphrase, summarise or re-quote it from memory. Matching ignores
+  whitespace and typographic quotes and dashes (as `eval/corpus.py`'s "verbatim"), nothing
+  else.
+- **Quote the chunk, not the PDF.** Some chunks are worded differently from the page:
+  table rows are labelled by column ("Type of Account: BSBD Accounts"), running page
+  headers are dropped from clauses that cross a page break, and IDBI bullet glyphs are
+  removed. Text that is in the PDF but not in the chunk does not resolve.
+- **Split clauses: cite the base clause id.** A long clause is stored as parts
+  (`RBI_2017_CIRCULAR:5#1`, `5#2`). Cite it as `RBI_2017_CIRCULAR:5`, the id the scenarios,
+  `supporting_clause_recall` and `must_not_cite` use. The citation resolves if the text is
+  in any part (or runs across two consecutive parts). A `#n` suffix is accepted and treated
+  as the base clause.
+- **Cite a clause that has its own chunk.** Section headings with no text of their own
+  (`IDBI_POLICY:5`, `RBI_IOS_2026:14`) are not chunks and do not resolve; cite the
+  sub-clause (`IDBI_POLICY:5.20`). A clause with its own text and sub-items, such as
+  `RBI_2017_CIRCULAR:7` or a whole table `IDBI_POLICY:Table-I`, does resolve, but cite the
+  most specific clause that holds the quoted text (`7(ii)`, `Table-I.03`).
+- A failing citation is reported with one reason: `unknown_clause` (no chunk with that id),
+  `too_long` (over 60 words) or `text_not_in_chunk`.

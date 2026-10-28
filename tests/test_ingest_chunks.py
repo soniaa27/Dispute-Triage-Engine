@@ -161,6 +161,19 @@ def test_table_rows_keep_band_and_merged_cells(chunks):
 
 
 @needs_corpus
+def test_ombudsman_annex_subheadings_are_sections_not_text(chunks):
+    annex = {n: chunks[f"RBI_IOS_2026:Annex-A.{n}"] for n in range(1, 8)}
+    assert "Amount of compensation admissible" not in annex[3].text
+    assert annex[4].section == "Amount of compensation admissible under the Scheme"
+    # Point 1 has no subheading of its own in the PDF; it sits directly under Part A.
+    assert annex[1].section == "Part A: Guidance for filing of a complaint"
+    assert len({annex[n].section for n in range(1, 7)}) == 6
+    for n in range(1, 7):
+        assert annex[n].text.endswith("."), annex[n].clause_id
+        assert annex[n + 1].section not in annex[n].text, annex[n].clause_id
+
+
+@needs_corpus
 def test_definitions_are_linked_not_merged(chunks):
     row = chunks["IDBI_POLICY:Table-I.03"]
     assert set(row.related) >= {"IDBI_POLICY:5.13", "IDBI_POLICY:5.20"}
