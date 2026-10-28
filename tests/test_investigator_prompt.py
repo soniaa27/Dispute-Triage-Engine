@@ -86,6 +86,13 @@ def test_passages_and_observations_are_shown():
     assert "Request more tools only if" in prompt
 
 
+def test_competing_fault_readings_rule_is_in_the_prompt():
+    prompt = _render()
+    assert "7. Competing fault readings" in prompt
+    assert 'set fault_hypothesis "unclear", route "escalate"' in prompt
+    assert "Two cases always have competing readings" in prompt
+
+
 def test_last_turn_demands_an_answer():
     assert "This is the last turn: answer now" in _render(turn=3, max_turns=3)
 

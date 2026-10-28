@@ -295,6 +295,13 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
 - **Prompt injection:** the complaint is placed inside `<complaint>` tags and treated as
   data. Tags inside the complaint are removed, so it cannot close its box. The model is
   told to ignore instructions there.
+- **Competing fault readings escalate** (prompt rule 7). Some facts fit more than one fault
+  category, and the categories lead to different liability. In that case the draft is
+  `unclear` / `escalate` and cites a provision for each reading. Two cases are named because
+  the brief requires them (D-011): an OTP or PIN given to a bank impersonator, and a SIM
+  swap. IDBI 5.12 calls both negligence, but the RBI circular does not settle them, and IDBI
+  5.20 also lists SIM swap as a third party breach. Credentials knowingly given to a website
+  or app remain plain negligence.
 - **On a retry,** the Verifier's feedback (strategy, unsupported claims, modifier
   provisions, previous position) is part of the prompt.
 - Rejected: a **fixed query plan** built from the request fields (A1 requires the agent to

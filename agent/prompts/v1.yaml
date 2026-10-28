@@ -62,6 +62,19 @@ agents:
          ids in brackets.
       6. If VERIFIER FEEDBACK is given, your previous draft was rejected: follow the
          retry strategy, and drop or re-support every claim it lists as unsupported.
+      7. Competing fault readings: before settling on a fault, check whether the facts fit
+         more than one category in the passages (customer negligence, third party breach,
+         bank fault). If they do and the categories lead to different liability, do not
+         pick one: set fault_hypothesis "unclear", route "escalate", and cite the deciding
+         provision for each reading.
+         Two cases always have competing readings, even though IDBI 5.12 lists them as
+         negligence, because the RBI circular does not classify them:
+         - an OTP or PIN given to someone posing as the bank (vishing by a bank
+           impersonator): negligence, or a third party breach by deception;
+         - a SIM swap: IDBI 5.12 calls it negligence, IDBI 5.20 a third party breach.
+         For these, cite the negligence provision and the third party breach row for the
+         computed delay. By contrast, credentials knowingly entered on a website or app, or
+         given to someone not claiming to be the bank, have one reading: negligence.
 
       REPLY with one JSON object and nothing else. Either request tools:
       {"action": "search",
