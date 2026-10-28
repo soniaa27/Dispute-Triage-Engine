@@ -25,6 +25,18 @@ class Retriever(Protocol):
         """Exact lookup by clause_id (see docs/interfaces.md); None if it does not exist."""
         ...
 
+    def related(self, doc_id: DocId, clause_id: str) -> list[str]:
+        """Clauses linked to this one at ingest, e.g. the definitions a table row depends on
+        ("IDBI_POLICY:Table-I.03" -> ["IDBI_POLICY:5.13", "IDBI_POLICY:5.20"]).
+
+        Citation ids in "DOC_ID:clause_id" form (a link may point to another document),
+        each resolvable with get_clause, in a stable order, without duplicates, never the
+        clause itself. A split clause's base id ("RBI_2017_CIRCULAR:5") returns the links of
+        all its parts. Returns [], never raises, for an unknown id, a heading-only parent
+        ("IDBI_POLICY:5") or a clause with no links.
+        """
+        ...
+
 
 def _is_working_day(day: date, holidays: set[date]) -> bool:
     if day.weekday() == SUNDAY or day in holidays:
