@@ -1,9 +1,13 @@
+import faulthandler
+import time
+
 import numpy as np
 import pytest
 
 from contracts.agent import DocId
+from eval.corpus import corpus_available
 from ingest.chunks import Chunk
-from ingest.embed import HashEmbedder, embed_model_name
+from ingest.embed import DEFAULT_EMBED_BATCH_SIZE, HashEmbedder, embed_batch_size, embed_model_name
 from ingest.index import build_index, embedding_text, load_index, search
 
 
@@ -55,6 +59,17 @@ def test_embed_model_from_environment(monkeypatch):
     assert embed_model_name() == "other/model"
 
 
+def test_embed_batch_size_from_environment(monkeypatch):
+    monkeypatch.delenv("EMBED_BATCH_SIZE", raising=False)
+    assert embed_batch_size() == DEFAULT_EMBED_BATCH_SIZE == 8
+    monkeypatch.setenv("EMBED_BATCH_SIZE", "16")
+    assert embed_batch_size() == 16
+    for bad in ("0", "-1", "eight"):
+        monkeypatch.setenv("EMBED_BATCH_SIZE", bad)
+        with pytest.raises(ValueError, match="EMBED_BATCH_SIZE"):
+            embed_batch_size()
+
+
 @pytest.mark.model
 def test_real_model_ranks_relevant_passage_first():
     from ingest.embed import FastEmbedder
@@ -63,3 +78,38 @@ def test_real_model_ranks_relevant_passage_first():
     passages = embedder.embed_passages([c.text for c in CHUNKS])
     query = embedder.embed_query("fraud reported within three working days, zero liability")
     assert int(np.argmax(passages @ query)) == 1
+
+
+FULL_CORPUS_EMBED_LIMIT_S = 120
+
+
+@pytest.mark.model
+@pytest.mark.skipif(not corpus_available(), reason="corpus PDFs not present in corpus/raw/")
+def test_real_model_embeds_the_full_corpus_in_bounded_time():
+    """Embed every chunk of the real PDFs, exactly as `python -m ingest build` does.
+
+    The other model test embeds 6 short texts, which fit in one small batch. That is why
+    it passed while the real build hung: fastembed's default batch of 256 padded the whole
+    corpus to 512 tokens and ran out of memory (docs/incident_log.md, 2026-10-28). This
+    test uses the real corpus size and text lengths, so a batch size that blows up memory
+    shows up here as a timeout or a crash. The bug made the build hang rather than slow
+    down, so a watchdog aborts the test run (with a traceback) if embedding never returns.
+    """
+    from ingest.documents import chunk_corpus
+    from ingest.embed import FastEmbedder
+    from ingest.pdf import load_corpus
+
+    chunks = chunk_corpus(load_corpus())
+    by_id = {c.citation_id: c for c in chunks}
+    texts = [embedding_text(c, by_id) for c in chunks]
+    embedder = FastEmbedder()
+    faulthandler.dump_traceback_later(2 * FULL_CORPUS_EMBED_LIMIT_S, exit=True)
+    try:
+        started = time.perf_counter()
+        vectors = embedder.embed_passages(texts)
+        elapsed = time.perf_counter() - started
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+    assert vectors.shape == (len(chunks), embedder.dim)
+    assert np.allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-3)
+    assert elapsed < FULL_CORPUS_EMBED_LIMIT_S, f"{len(chunks)} chunks took {elapsed:.0f}s"
