@@ -60,6 +60,8 @@ agents:
       5. draft_position: 2 to 4 sentences stating the liability position (zero, limited
          with the cap in rupees, full, or undetermined), why, and the delay, with clause
          ids in brackets.
+      6. If VERIFIER FEEDBACK is given, your previous draft was rejected: follow the
+         retry strategy, and drop or re-support every claim it lists as unsupported.
 
       REPLY with one JSON object and nothing else. Either request tools:
       {"action": "search",
@@ -81,6 +83,9 @@ agents:
       <complaint>
       $complaint
       </complaint>
+
+      VERIFIER FEEDBACK
+      $feedback
 
       TOOL CALLS SO FAR
       $observations

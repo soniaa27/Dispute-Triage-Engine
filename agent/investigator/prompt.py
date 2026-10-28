@@ -22,7 +22,7 @@ from agent.investigator.tools import (
     SearchRequest,
 )
 from agent.prompts import CURRENT_PROMPT_VERSION, agent_prompts
-from contracts.agent import FaultHypothesis
+from contracts.agent import FaultHypothesis, VerifierOutput
 from contracts.dispute import DisputeRequest
 from contracts.result import FraudType, Route
 
@@ -35,7 +35,11 @@ _COMPLAINT_TAG = re.compile(r"<\s*/?\s*complaint\s*>", re.IGNORECASE)
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
 
 
-class ReplyFormatError(ValueError):
+class InvestigatorError(Exception):
+    """The Investigator could not produce a draft; the graph escalates with this message."""
+
+
+class ReplyFormatError(InvestigatorError, ValueError):
     """The model's reply is not a valid search request or draft."""
 
 
@@ -119,9 +123,21 @@ def render_passages(evidence: Evidence) -> str:
     return "\n\n".join(blocks) or "none yet"
 
 
+def render_feedback(verifier: VerifierOutput | None, previous_position: str | None) -> str:
+    if verifier is None or verifier.action != "retry":
+        return "none (first draft)"
+    lines = [f"- Outcome: {verifier.outcome}", f"- Retry strategy: {verifier.retry_strategy}"]
+    lines += [f"- Unsupported claim: {claim}" for claim in verifier.unsupported_claims]
+    lines += [f"- Provision to consider: [{p.citation_id}]" for p in verifier.modifier_passages]
+    if previous_position:
+        lines.append(f"- Previous draft position: {previous_position}")
+    return "\n".join(lines)
+
+
 def render_prompt(request: DisputeRequest, facts: CaseFacts, evidence: Evidence,
                   observations: list[str], turn: int, max_turns: int,
-                  version: str = CURRENT_PROMPT_VERSION) -> str:
+                  version: str = CURRENT_PROMPT_VERSION, feedback: str = "none (first draft)"
+                  ) -> str:
     templates = agent_prompts("investigator", version)
     if turn >= max_turns:
         instruction = "This is the last turn: answer now, using only the passages above."
@@ -134,6 +150,7 @@ def render_prompt(request: DisputeRequest, facts: CaseFacts, evidence: Evidence,
     turn_text = Template(templates["turn"]).substitute(
         facts=render_facts(request, facts),
         complaint=_COMPLAINT_TAG.sub("[tag removed]", request.complaint_text),
+        feedback=feedback,
         observations="\n".join(observations) or "none yet",
         passages=render_passages(evidence),
         turn=turn, max_turns=max_turns, turn_instruction=instruction,
