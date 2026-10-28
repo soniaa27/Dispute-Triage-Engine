@@ -108,11 +108,28 @@ agent; the real agents must implement it.
 ## Retriever (`contracts/tools.py`)
 
 - **What:** a `Protocol` with
-  `search_corpus(query, k=5, doc_ids=None) -> list[Passage]` (best first) and
-  `get_clause(doc_id, clause_id) -> Passage | None` (exact lookup).
-- **Implements:** Person 1, over the FAISS/Chroma index built by `python -m ingest build`.
-- **Calls:** both agents. The Investigator searches. The Verifier uses `get_clause` to
-  re-read cited clauses and `search_corpus` to look for modifying provisions.
+  `search_corpus(query, k=5, doc_ids=None) -> list[Passage]` (best first),
+  `get_clause(doc_id, clause_id) -> Passage | None` (exact lookup) and
+  `related(doc_id, clause_id) -> list[str]` (linked clauses).
+- **`related` contract:** the clauses linked to this one at ingest, such as the definitions
+  a table row depends on, as citation ids `DOC_ID:clause_id` (a link may point to another
+  document), each resolvable with `get_clause`. Stable order (as recorded at ingest), no
+  duplicates, never the clause itself. A split clause's base id (`RBI_2017_CIRCULAR:5`)
+  returns the links of all its parts. Returns `[]` and never raises for an unknown id, a
+  heading-only parent (`IDBI_POLICY:5`) or a clause with no links. Links run both ways, so
+  a definition also lists the table it qualifies.
+  Example: `related("IDBI_POLICY", "Table-I.03")` →
+  `["IDBI_POLICY:5.13", "IDBI_POLICY:5.20"]`.
+- **Implements:** `retrieval.HybridRetriever`, over the FAISS index and chunks built by
+  `python -m ingest build`. Agents depend on the `Retriever` protocol, never on
+  `HybridRetriever` directly.
+- **Calls:** both agents. The Investigator searches and fetches the definitions a table
+  row depends on with `related`. The Verifier uses `get_clause` to re-read cited clauses,
+  `related` to check the definitions they rely on, and `search_corpus` to look for
+  modifying provisions.
+- **Counting:** the graph wraps the retriever, and every call to `search_corpus`,
+  `get_clause` or `related` counts as one tool call (limit `AGENT_MAX_TOOL_CALLS`) and is
+  logged to the trace.
 
 ## compute_working_days (`contracts/tools.py`)
 
