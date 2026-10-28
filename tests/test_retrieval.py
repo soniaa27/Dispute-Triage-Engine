@@ -3,7 +3,7 @@ import pytest
 from contracts.agent import DocId
 from contracts.tools import Retriever
 from eval.corpus import corpus_available
-from ingest.build import INDEX_DIR, MANIFEST_FILE, build
+from ingest.build import INDEX_DIR, MANIFEST_FILE, build, load_chunks
 from ingest.chunks import Chunk
 from ingest.embed import HashEmbedder
 from ingest.index import build_index, load_index
@@ -19,8 +19,11 @@ def _chunk(doc_id, clause_id, text, **kw) -> Chunk:
 
 
 CHUNKS = [
-    _chunk(RBI, "5#1", "Banks must ask customers to register for SMS alerts.", page=2),
-    _chunk(RBI, "5#2", "Alerts shall be sent for every electronic transaction.", page=3),
+    # Links on split parts (none in the real corpus yet): merged, de-duplicated, no self.
+    _chunk(RBI, "5#1", "Banks must ask customers to register for SMS alerts.", page=2,
+           related=["RBI_2017_CIRCULAR:12", "RBI_2017_CIRCULAR:5#2"]),
+    _chunk(RBI, "5#2", "Alerts shall be sent for every electronic transaction.", page=3,
+           related=["IDBI_POLICY:14.1", "RBI_2017_CIRCULAR:12"]),
     _chunk(RBI, "12", "The burden of proving customer liability shall lie on the bank."),
     _chunk(IDBI, "14.1", "The burden of proving customer liability shall lie on the Bank."),
     _chunk(IDBI, "Table-I.03", "Table - I, S. No 03\nLiability of Customer: Rs 10,000",
@@ -74,7 +77,14 @@ def test_get_clause_exact_whole_and_unknown(retriever):
 
 def test_related_links(retriever):
     assert retriever.related(IDBI, "Table-I.03") == ["IDBI_POLICY:5.13"]
-    assert retriever.related(RBI, "5") == [] and retriever.related(RBI, "99") == []
+    assert retriever.related(RBI, "99") == [] and retriever.related(RBI, "12") == []
+
+
+def test_related_merges_split_parts_without_duplicates_or_self(retriever):
+    # A link to another document is kept; the parts' links to each other are dropped.
+    assert retriever.related(RBI, "5") == ["RBI_2017_CIRCULAR:12", "IDBI_POLICY:14.1"]
+    assert retriever.related(RBI, "5#1") == ["RBI_2017_CIRCULAR:12"]
+    assert retriever.related(RBI, "5#2") == ["IDBI_POLICY:14.1", "RBI_2017_CIRCULAR:12"]
 
 
 def test_mismatched_index_is_rejected(tmp_path):
@@ -110,6 +120,47 @@ def test_load_built_corpus(built):
     assert table.text.startswith("Table - I") and "S. No" in table.text
     top = retriever.search_corpus("burden of proving customer liability", k=2)
     assert {p.clause_id for p in top} == {"12", "14.1"}
+
+
+@pytest.fixture(scope="module")
+def corpus_retriever(built):
+    """Retriever over the real chunks and links (hash vectors: no model download)."""
+    return HybridRetriever.load(built, embedder=HashEmbedder())
+
+
+@corpus
+def test_related_on_real_chunks(corpus_retriever):
+    r = corpus_retriever
+    assert isinstance(r, Retriever)
+    assert {"IDBI_POLICY:5.13", "IDBI_POLICY:5.20"} <= set(r.related(IDBI, "Table-I.03"))
+    assert "IDBI_POLICY:5.12" in r.related(IDBI, "Table-II.03")
+    assert r.related("IDBI_POLICY", "Table-I.03") == r.related(IDBI, "Table-I.03")  # str ok
+    for doc_id, clause_id in [(IDBI, "99.9"),           # unknown id
+                              (IDBI, ""), (IDBI, "Table I.03"), ("NOT_A_DOC", "5.13"),
+                              (IDBI, "5"), (DocId.RBI_IOS_2026, "14")]:  # heading-only
+        assert r.get_clause(doc_id, clause_id) is None
+        assert r.related(doc_id, clause_id) == [], (doc_id, clause_id)
+
+
+@corpus
+def test_related_links_resolve_and_are_stable(corpus_retriever, built):
+    r = corpus_retriever
+    chunks = load_chunks(built)
+    ids = {c.citation_id for c in chunks} | {f"{c.doc_id}:{c.base_clause_id}" for c in chunks}
+    linked = 0
+    for cid in sorted(ids):
+        doc_id, clause_id = cid.split(":", 1)
+        links = r.related(doc_id, clause_id)
+        linked += bool(links)
+        assert len(links) == len(set(links)), cid
+        assert cid not in links, cid
+        for link in links:
+            assert r.get_clause(*link.split(":", 1)) is not None, (cid, link)
+        assert r.related(doc_id, clause_id) == links  # same order every call
+    assert linked >= 20  # tables, rows, notes and definitions carry links
+    # Order is the order recorded at ingest.
+    row = next(c for c in chunks if c.citation_id == "IDBI_POLICY:Table-I.03")
+    assert r.related(IDBI, "Table-I.03") == row.related
 
 
 @corpus
