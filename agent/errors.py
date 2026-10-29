@@ -1,4 +1,8 @@
-"""Errors shared by the agents and whatever runs them (agent.runner now, the graph later)."""
+"""Errors shared by the agents and whatever runs them (agent.runner, agent.graph)."""
+
+# Escalation reasons for a run stopped before an answer (docs/interfaces.md).
+MODEL_UNAVAILABLE = "model unavailable"
+LIMIT_REACHED = "investigation limit reached"
 
 
 class ToolBudgetExceeded(Exception):

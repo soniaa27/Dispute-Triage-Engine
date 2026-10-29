@@ -29,3 +29,7 @@ escaping. A file's `version:` must equal its file name; a test checks this.
 | Version | Agents | Notes |
 |---------|--------|-------|
 | `v1` | investigator | Baseline tool loop: search / answer JSON, delay given as a fact (D-020) |
+
+The Investigator's prompts are `v<n>.yaml`. The Verifier's are `verifier_v<n>.yaml`
+(declaring `version: verifier_v<n>`), versioned separately. A graph run records both, e.g.
+`inv-v1+ver-v1`.

@@ -309,3 +309,71 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
   completion only, and a JSON protocol keeps the provider swappable by configuration.
   An **open-ended ReAct loop**: the rate limit and the 75 s budget allow only a few model
   calls per run.
+
+## D-021 LangGraph for the agent loop (rejected: a hand-written loop, LangChain agents)
+
+- **Chosen:** `agent/graph.py`, a LangGraph `StateGraph` over `AgentState`: investigate →
+  verify → finalize, with a conditional edge back to investigate for a retry. Requirement
+  A1 names LangGraph; the graph makes the hand-off and the retry loop explicit, and each
+  node's state transition is testable on its own.
+- **One wrapped retriever and LLM client per run**, shared by both nodes (`agent/tracking.py`),
+  so `AGENT_MAX_TOOL_CALLS` is one budget for the whole run and the trace is one list. The
+  graph checks the step limit and the wall clock before each agent node; the agents check
+  the wall clock before each model call.
+- **Errors become state, not exceptions:** a node that hits a limit or loses the model
+  sets `halt_reason` and the graph goes to finalize, which escalates. Only an unexpected
+  exception escapes, so the worker marks the run failed.
+- **Pinned to `langgraph==1.2.18`**, which resolves with the services' pydantic 2.10.4. It
+  adds langchain-core and langsmith to the worker image. LangSmith tracing stays off
+  (no `LANGSMITH_*` variables are set); our own trace is the record.
+- **Rejected: a hand-written loop.** Fewer dependencies, but A1 asks for LangGraph.
+  **Rejected: LangChain agent executors / tool calling.** They expect provider-native
+  function calling, which llm-gateway does not expose (D-020).
+
+## D-022 Verifier: at most 2 model calls per pass, everything deterministic in code
+
+- **Why 2:** at about 4 model calls a minute, each call costs about 15 s of a run's budget,
+  and the Investigator already takes 2. The Verifier makes one "check" call (claims and
+  conflict searches) and one "judge" call, only if the searches found passages it had not
+  shown the model. A pass decided by code makes none.
+- **In code:** the citation check (the same rules as `eval/chunks.py`, re-implemented in
+  `agent/verifier/citations.py` so the agent does not import `eval/`; a test proves the two
+  agree on every real chunk), linked-clause fetching, the recomputed delay (D-009), the hard
+  rules (D-023), and the decision.
+- **Strict replies:** the replies must be JSON with every field present and booleans as JSON
+  booleans. A malformed reply makes the draft `unsupported` and escalates; it is never read
+  as verified and never repaired with another call. Unknown extra keys are ignored, as for
+  the Investigator.
+- **Rejected:** one combined call (the conflict search needs the model's queries first);
+  an LLM-only verifier (citations and the delay must be exact, D-009, D-016); verifying
+  each claim with its own call (too many calls for the rate limit).
+
+## D-023 Hard rules escalate in code, before any model call
+
+- Some cases must escalate whatever a model says (F7): a delay of exactly 3 or 7 working
+  days (D-009), a fault the Investigator could not settle, the customer's own statements
+  contradicting the fault (S14 to S16), and a draft with no resolvable provision. These
+  are checked in code (`agent/verifier/rules.py`), so a persuasive draft or an injected
+  instruction cannot talk the run out of escalating, and no model call is spent.
+- Each rule is derived from the documents and the scenarios. A test checks that, given each
+  scenario's expected draft, the rules fire on exactly the scenarios that must escalate.
+- **Rejected rules** (listed in `rules.py`): `received_alert` false, `card_in_possession`,
+  complaint keywords, the 60 calendar day limit, and a missing alert time. Each either
+  contradicts a scenario (S07, S08) or has no support in the corpus.
+
+## D-024 Retry: the Investigator redrafts with the Verifier's feedback, once by default
+
+- An `unsupported` verdict (a claim no passage supports, a failed citation, a wrong delay)
+  returns `action="retry"` with a strategy naming each unsupported claim. The graph sends
+  the run back to investigate; the Investigator already shows `state.verifier`'s strategy,
+  unsupported claims and modifier passages, and its previous position, to the model
+  (D-020), so no change to `agent/investigator` was needed.
+- At most `AGENT_MAX_VERIFY_RETRIES` (default 1) redrafts; after that the verify node turns
+  the retry into an escalation listing the claims that are still unsupported.
+- Conflicts, hard rules and malformed Verifier replies escalate rather than retry: a
+  redraft cannot remove a conflict in the corpus, and a malformed reply is not the
+  Investigator's fault.
+- **Cost:** a retry adds 3 to 5 model calls (about 45 to 75 s at 4 a minute), more than the
+  default 75 s wall clock leaves. Live settings that let one retry finish are in
+  [agents.md](agents.md) ("Limits"); with the defaults a retry escalates with
+  "investigation limit reached".

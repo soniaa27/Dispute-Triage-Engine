@@ -151,6 +151,50 @@ agent; the real agents must implement it.
 - **Cost:** 2 LLM calls normally, 3 at most (`step="investigator"`), and about 2 to 8 tool
   calls. Design: [decisions.md](decisions.md) D-020.
 
+## Verifier (`agent/verifier`)
+
+- **Call:** `verify(state, draft, retriever, llm, *, prompt_version="v1") -> VerifierOutput`,
+  from the graph's verify node with `draft = state.investigator`, the graph's counting
+  retriever and the shared LLM client. `verify_detailed(...)` returns the same output plus
+  the draft's citations that passed the citation check (`Verification.citations`), which the
+  graph cites in the result.
+- **Reads, never writes, `state`.** It uses `state.request` (claims, dates),
+  `state.run_id`, `state.started_at` and `state.max_wall_clock_seconds`.
+- **Checks, in order:** citations (code), hard rules (code), linked clauses (code), then at
+  most 2 model calls (`step="verifier"`): "check" (claims, conflict searches) and "judge"
+  (only if the searches found new passages). Details: [agents.md](agents.md).
+- **Output rules:** `return` only for `verified` with nothing unsupported; `retry` (with a
+  `retry_strategy`) when claims are unsupported; `escalate` (with a reason) for hard rules,
+  conflicts, an escalate draft or a malformed model reply. For a conflict or a boundary
+  delay, `modifier_passages` holds the other side's clauses, so the result cites both.
+- **Raises (not caught; the graph escalates):** `ToolBudgetExceeded`,
+  `LLMUnavailableError`, `LLMGatewayError`, and `agent.verifier.VerifierError` (wall-clock
+  budget spent before a model call). A malformed model reply is not raised: it becomes
+  outcome `unsupported`, action `escalate`.
+- **Prompts:** `agent/prompts/verifier_<version>.yaml`, loaded with
+  `agent.prompts.load_prompts("verifier_<version>")`.
+
+## Graph (`agent/graph.py`)
+
+- **Call:** `run_graph(req, run_id, retriever, llm, *, settings=None, **limits) -> RunResult`,
+  from `agent.runner` when `AGENT_MODE=graph`. `prompt_version` is
+  `inv-<investigator version>+ver-<verifier version>`.
+- **State:** `GraphState`, an `AgentState` plus `halt_reason` (set by a node that stopped the
+  run), `verified_citations` and the final `result`.
+- **State transitions:**
+
+| Node | Reads | Writes |
+|---|---|---|
+| investigate | request, `investigator` and `verifier` (on a retry) | `investigator`, `step_count`, `tool_call_count`, `trace`, or `halt_reason` |
+| verify | request, `investigator`, `attempts` | `verifier`, `verified_citations`, `attempts` (+1 on a retry), `step_count`, `tool_call_count`, `trace`, or `halt_reason` |
+| finalize | everything | `result`, `trace` |
+
+  Edges: investigate → verify, or finalize if `halt_reason`; verify → investigate if
+  `verifier.action == "retry"`, else finalize; finalize → END. A retry with
+  `attempts >= AGENT_MAX_VERIFY_RETRIES` is turned into `escalate` by the verify node.
+- **Counters:** `step_count` counts agent node executions (limit `max_steps`);
+  `tool_call_count` mirrors the shared retriever wrapper (limit `max_tool_calls`).
+
 ## compute_working_days (`contracts/tools.py`)
 
 - **What:** `compute_working_days(start, end, home_state, holidays=None) -> int`. Counts

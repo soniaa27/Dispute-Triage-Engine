@@ -102,10 +102,12 @@ def test_agent_mode_defaults_to_fake_and_rejects_unknown(monkeypatch):
     monkeypatch.setenv("AGENT_MODE", "investigator")
     assert WorkerSettings(database_url="x", redis_url="y").agent_mode == "investigator"
     monkeypatch.setenv("AGENT_MODE", "graph")
+    assert WorkerSettings(database_url="x", redis_url="y").agent_mode == "graph"
+    monkeypatch.setenv("AGENT_MODE", "langchain")
     with pytest.raises(ValidationError):
         WorkerSettings(database_url="x", redis_url="y")
     with pytest.raises(ValueError, match="unknown AGENT_MODE"):
-        runner.run_agent(_request(), "r", mode="graph")
+        runner.run_agent(_request(), "r", mode="langchain")
 
 
 def test_fake_mode_is_still_the_placeholder(monkeypatch):
