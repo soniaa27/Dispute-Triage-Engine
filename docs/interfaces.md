@@ -131,6 +131,26 @@ agent; the real agents must implement it.
   `get_clause` or `related` counts as one tool call (limit `AGENT_MAX_TOOL_CALLS`) and is
   logged to the trace.
 
+## Investigator (`agent/investigator`)
+
+- **Call:** `investigate(state, retriever, llm) -> InvestigatorOutput`, from the graph's
+  Investigator node (Person 2): `state.investigator = investigate(state, retriever, llm)`.
+  `retriever` is the graph's counting wrapper and `llm` the shared `HttpLLMClient`.
+- **Reads, never writes, `state`.** Counters and the trace belong to the graph. The
+  wrapper logs each search. The Investigator fills `queries_run`.
+- **Output:** `passages` holds everything retrieved in this attempt, and
+  `cited_clause_ids` the subset the draft relies on. `working_days_delay` and
+  `delay_basis` come from `compute_working_days`, never from the model.
+- **On a retry** (`state.verifier.action == "retry"`) the Verifier's retry strategy,
+  unsupported claims and modifier passages, and the previous draft position, are shown to
+  the model. Each attempt searches afresh.
+- **Raises (not caught; the graph escalates):** `ToolBudgetExceeded`,
+  `LLMUnavailableError` ("model unavailable"), `agent.llm_client.LLMGatewayError`, and
+  `agent.investigator.InvestigatorError` (malformed reply, no evidence, or wall-clock
+  budget spent before a turn). `str(exc)` is a usable escalation reason.
+- **Cost:** 2 LLM calls normally, 3 at most (`step="investigator"`), and about 2 to 8 tool
+  calls. Design: [decisions.md](decisions.md) D-020.
+
 ## compute_working_days (`contracts/tools.py`)
 
 - **What:** `compute_working_days(start, end, home_state, holidays=None) -> int`. Counts

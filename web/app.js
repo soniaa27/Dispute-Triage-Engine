@@ -815,10 +815,19 @@ function renderResult() {
   tick();
 }
 
+// Honest labels for results no Verifier has checked: the placeholder ("fake-0") and the
+// Investigator's unverified draft ("v1+unverified").
 function renderFakeBanner(r) {
-  if (!r?.prompt_version?.startsWith("fake")) return "";
-  return `<div class="callout tone-neutral fake-banner" role="note">${icon("info")}
-    <p><strong>Placeholder agent:</strong> this result is not real reasoning; citations are stand-ins.</p></div>`;
+  const version = r?.prompt_version || "";
+  if (version.startsWith("fake")) {
+    return `<div class="callout tone-neutral fake-banner" role="note">${icon("info")}
+      <p><strong>Placeholder agent:</strong> this result is not real reasoning; citations are stand-ins.</p></div>`;
+  }
+  if (version.includes("+unverified")) {
+    return `<div class="callout tone-neutral fake-banner" role="note">${icon("info")}
+      <p><strong>Investigator draft:</strong> not yet checked by the Verifier.</p></div>`;
+  }
+  return "";
 }
 
 function renderOutcome(v) {

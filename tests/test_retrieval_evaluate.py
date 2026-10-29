@@ -76,3 +76,25 @@ def test_cli_on_a_built_corpus(tmp_path, capsys, monkeypatch):
     assert "| hybrid |" in out and "| keyword |" in out
     assert len(list((tmp_path / "reports").glob("*_retrieval-complaint.json"))) == 1
 
+
+
+def test_investigator_source_caches_queries_and_records_failures():
+    from retrieval.evaluate import InvestigatorQueries
+    from tests.test_investigator import SEARCH, ScriptedLLM, answer
+    from tests.test_investigator_tools import FakeRetriever
+
+    s09 = next(s for s in load_scenarios() if s.id == "S09")
+    llm = ScriptedLLM(SEARCH, answer(cited_clause_ids=[]), "not JSON")
+    source = InvestigatorQueries(FakeRetriever({}, [_p("IDBI_POLICY:5.20")]), llm)
+    report = evaluate(Fixed("RBI_2017_CIRCULAR:6(ii)"), [S01, s09],
+                      modes=("hybrid", "dense"), ks=(5,), source="investigator",
+                      queries=source)
+
+    assert len(llm.calls) == 3  # S01 twice (search, answer), S09 once; not per mode
+    assert all(c["run_id"].startswith("retrieval-eval-S") for c in llm.calls)
+    first = report["modes"]["hybrid"]["scenarios"][0]
+    assert first["queries"] == ["third party breach reported within three working days"]
+    assert report["modes"]["dense"]["scenarios"][1]["queries"] == []
+    assert report["meta"]["query_failures"] == {
+        "S09": "ReplyFormatError: no JSON object in reply: 'not JSON'"}
+    assert "- S09: ReplyFormatError" in markdown_summary(report)

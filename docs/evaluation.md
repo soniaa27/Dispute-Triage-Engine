@@ -175,10 +175,16 @@ make retrieval-eval ARGS="--k 3 5 --modes hybrid --no-write"
 ```
 
 Every mode is scored: `hybrid` (what `search_corpus` uses), `dense` (FAISS only) and
-`keyword` (BM25 only). Queries come from a named source (`--queries`). `complaint` uses the
-scenario's `complaint_text` unchanged. The Investigator's query plan will be added as
-another source. When a source gives several queries, their rankings are merged by RRF.
-A retrieved `5#1` counts as clause `5`.
+`keyword` (BM25 only). Queries come from a named source (`--queries`):
+
+- `complaint` uses the scenario's `complaint_text` unchanged.
+- `investigator` runs the real Investigator through llm-gateway (default
+  `http://localhost:8100`, or `--gateway`) and scores the searches it chose
+  (`queries_run`). It makes about 2 LLM calls per scenario, at 4 calls a minute, so use
+  `--ids S01 S09` for a quick check. Runs that fail are listed under `query_failures`.
+
+When a source gives several queries, their rankings are merged by RRF. A retrieved `5#1`
+counts as clause `5`.
 
 | Metric | Definition |
 |--------|------------|
@@ -189,8 +195,8 @@ A retrieved `5#1` counts as clause `5`.
 | `mrr` | Mean of 1 / rank of the first supporting clause (0 if not in the top 50) |
 | `latency_ms` | p50 and p95 of one search call |
 
-Each run writes `eval/reports/<UTC timestamp>_retrieval-<source>.json` (per-scenario ranks
-of every supporting and must-not-cite clause) and a `.md` summary.
+Each run writes `eval/reports/<UTC timestamp>_retrieval-<source>.json` (the queries, and
+the rank of every supporting and must-not-cite clause, per scenario) and a `.md` summary.
 
 With `complaint` queries, recall is low (hybrid recall@10 is about 0.10 with bge-small).
 Customers do not state their account type or how many working days passed, and those facts

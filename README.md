@@ -12,7 +12,9 @@ citations. The system never issues a credit or closes a dispute; a disputes anal
 > (`agent/runner.py`): fixed 2 s delay, placeholder citations, escalates when the complaint
 > mentions "OTP". Corpus ingestion and retrieval are done (`python -m ingest build`:
 > clause-level chunks with verified tables, a FAISS index, and a hybrid FAISS + BM25
-> retriever; the worker image builds the index). The real agents and observability come next.
+> retriever; the worker image builds the index). The Investigator agent is implemented
+> (`agent/investigator`) but not yet wired into the graph. The Verifier, the graph and
+> observability come next.
 
 ## Architecture
 
@@ -166,7 +168,7 @@ freshness check, pytest and `docker compose build` on every PR and push to `main
 | `worker/` | RQ worker: status transitions, timeout, failure handling | Person B |
 | `llm_gateway/` | `/v1/complete`: providers (stub, gemini), retry, breaker, rate limit, cost | Person B |
 | `web/` | Static HTML + vanilla JS client | Person B |
-| `agent/` | `run_agent` (fake for now), `prompts/` (versioned YAML) | Person A |
+| `agent/` | `run_agent` (fake for now), `investigator/` (Investigator agent), `prompts/` (versioned YAML) | Person A |
 | `ingest/` | Corpus pipeline: PDF text, clause chunking, verified tables, build manifest | Person A |
 | `retrieval/` | `HybridRetriever`: dense (FAISS) + keyword (BM25) search, clause lookup | Person A |
 | `eval/` | 24 scenarios, validator, batch runner, metrics, report compare | Person A |
