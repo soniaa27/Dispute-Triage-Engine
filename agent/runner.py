@@ -3,32 +3,35 @@
 AGENT_MODE (worker settings) picks what runs:
 - fake: deterministic placeholder after a fixed delay, no model or retrieval ("fake-0").
 - investigator: the Investigator alone; its draft is returned unverified (prompt_version
-  "<version>+unverified"). TEMPORARY direct call: the LangGraph graph with the Verifier
-  replaces run_investigator. Keep the signature and the RunResult contract unchanged so the
-  worker and API need no edits.
+  "<version>+unverified"). Kept for comparison and debugging.
+- graph: the LangGraph graph, Investigator then Verifier (agent/graph.py), prompt_version
+  "inv-<version>+ver-<version>". Only a verified draft completes; everything else escalates.
 
-In investigator mode a run never returns a confident answer it did not finish: the model
-being unavailable, the tool or time budget running out, or an unusable model reply all
-escalate to an analyst; any other exception propagates and the worker marks the run failed.
+Keep the signature and the RunResult contract unchanged so the worker and API need no edits.
+
+In investigator and graph mode a run never returns a confident answer it did not finish:
+the model being unavailable, the tool or time budget running out, or an unusable model reply
+all escalate to an analyst; any other exception propagates and the worker marks the run
+failed.
 """
 
 import time
-from collections.abc import Callable, Sequence
 from functools import cache
 from typing import Any, Literal
 
 import structlog
 
-from agent.errors import ToolBudgetExceeded
+from agent.errors import LIMIT_REACHED, MODEL_UNAVAILABLE, ToolBudgetExceeded
 from agent.investigator import InvestigatorError, investigate
 from agent.llm_client import LLMGatewayError
 from agent.prompts import CURRENT_PROMPT_VERSION
+from agent.tracking import TracedLLM, TracedRetriever, ms_since
 from contracts import Channel, Citation, DisputeRequest, FraudType, Route, RunResult, RunStatus
-from contracts.agent import AgentState, DocId, InvestigatorOutput, Passage
-from contracts.llm import LLMClient, LLMResponse, LLMUnavailableError
+from contracts.agent import AgentState, InvestigatorOutput
+from contracts.llm import LLMClient, LLMUnavailableError
 from contracts.tools import Retriever
 
-AgentMode = Literal["fake", "investigator"]
+AgentMode = Literal["fake", "investigator", "graph"]
 
 log = structlog.get_logger("agent.runner")
 
@@ -100,6 +103,8 @@ def run_fake(req: DisputeRequest, run_id: str) -> RunResult:
 
 
 def run_agent(req: DisputeRequest, run_id: str, mode: AgentMode = "fake") -> RunResult:
+    if mode == "graph":
+        return run_graph_mode(req, run_id)
     if mode == "investigator":
         return run_investigator(req, run_id)
     if mode == "fake":
@@ -114,9 +119,6 @@ UNVERIFIED_SUFFIX = "+unverified"
 # clause's chunk text, checked by eval.chunks.ChunkIndex.check_citation.
 MAX_CITATION_WORDS = 60
 PART_SEPARATOR = "#"  # ingest.chunks: "5#2" is part 2 of clause "5"
-
-MODEL_UNAVAILABLE = "model unavailable"
-LIMIT_REACHED = "investigation limit reached"
 
 
 @cache
@@ -139,84 +141,6 @@ def warm_up() -> None:
     """Load the retriever and LLM client now, e.g. in the worker before it forks jobs."""
     get_retriever()
     get_llm_client()
-
-
-def _ms(started: float) -> int:
-    return round((time.perf_counter() - started) * 1000)
-
-
-class TracedRetriever:
-    """The Retriever the Investigator sees: counts every call against the run's tool-call
-    limit, raising ToolBudgetExceeded instead of making the call over it, and records each
-    call in the trace with its latency."""
-
-    def __init__(self, inner: Retriever, trace: list[dict[str, Any]], max_calls: int):
-        self._inner = inner
-        self._trace = trace
-        self._max_calls = max_calls
-        self.calls = 0
-
-    def _call(self, entry: dict[str, Any], call: Callable[[], Any]) -> Any:
-        if self.calls >= self._max_calls:
-            raise ToolBudgetExceeded(f"tool-call limit of {self._max_calls} reached")
-        self.calls += 1
-        started = time.perf_counter()
-        try:
-            return call()
-        except Exception as exc:
-            entry["error"] = f"{type(exc).__name__}: {exc}"
-            raise
-        finally:
-            entry["latency_ms"] = _ms(started)
-            self._trace.append(entry)
-
-    def search_corpus(self, query: str, k: int = 5,
-                      doc_ids: Sequence[DocId] | None = None) -> list[Passage]:
-        entry: dict[str, Any] = {"step": "search_corpus", "query": query, "k": k}
-        if doc_ids:
-            entry["doc_ids"] = [str(d) for d in doc_ids]
-        found = self._call(entry, lambda: self._inner.search_corpus(query, k=k, doc_ids=doc_ids))
-        entry["results"] = [p.citation_id for p in found]
-        return found
-
-    def get_clause(self, doc_id: DocId, clause_id: str) -> Passage | None:
-        entry: dict[str, Any] = {"step": "get_clause", "clause": f"{doc_id}:{clause_id}"}
-        passage = self._call(entry, lambda: self._inner.get_clause(doc_id, clause_id))
-        entry["found"] = passage is not None
-        return passage
-
-    def related(self, doc_id: DocId, clause_id: str) -> list[str]:
-        entry: dict[str, Any] = {"step": "related", "clause": f"{doc_id}:{clause_id}"}
-        links = self._call(entry, lambda: self._inner.related(doc_id, clause_id))
-        entry["results"] = links
-        return links
-
-
-class TracedLLM:
-    """The LLMClient the Investigator sees: records each call (tokens, cost, latency)."""
-
-    def __init__(self, inner: LLMClient, trace: list[dict[str, Any]]):
-        self._inner = inner
-        self._trace = trace
-        self.calls = 0
-
-    def complete(self, prompt: str, *, prompt_version: str, step: str, run_id: str,
-                 max_tokens: int | None = None) -> LLMResponse:
-        self.calls += 1
-        entry: dict[str, Any] = {"step": "llm", "agent": step, "prompt_version": prompt_version}
-        started = time.perf_counter()
-        try:
-            response = self._inner.complete(prompt, prompt_version=prompt_version, step=step,
-                                            run_id=run_id, max_tokens=max_tokens)
-        except Exception as exc:
-            entry["error"] = f"{type(exc).__name__}: {exc}"
-            raise
-        finally:
-            entry["latency_ms"] = _ms(started)
-            self._trace.append(entry)
-        entry.update(model=response.model, prompt_tokens=response.prompt_tokens,
-                     completion_tokens=response.completion_tokens, cost_usd=response.cost_usd)
-        return response
 
 
 def _wall_clock_spent(state: AgentState) -> bool:
@@ -286,7 +210,7 @@ def run_investigator(req: DisputeRequest, run_id: str) -> RunResult:
     def summary(outcome: str) -> None:
         # Added before the RunResult is built: RunResult copies the trace list.
         trace.append({"step": "investigator", "outcome": outcome, "llm_calls": llm.calls,
-                      "tool_calls": retriever.calls, "latency_ms": _ms(started)})
+                      "tool_calls": retriever.calls, "latency_ms": ms_since(started)})
 
     reason = None
     try:
@@ -312,3 +236,12 @@ def run_investigator(req: DisputeRequest, run_id: str) -> RunResult:
     summary(f"escalated: {reason or 'investigator error'}")
     text = f"{reason} ({error})" if reason else str(error)
     return _escalated(run_id, text, prompt_version, trace)
+
+
+# ---------- Graph (AGENT_MODE=graph) ----------
+
+def run_graph_mode(req: DisputeRequest, run_id: str) -> RunResult:
+    """Investigator and Verifier through the LangGraph graph, over the shared clients."""
+    from agent.graph import run_graph
+
+    return run_graph(req, run_id, get_retriever(), get_llm_client())
