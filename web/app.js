@@ -827,6 +827,12 @@ function renderFakeBanner(r) {
     return `<div class="callout tone-neutral fake-banner" role="note">${icon("info")}
       <p><strong>Investigator draft:</strong> not yet checked by the Verifier.</p></div>`;
   }
+  if (version.includes("+ver-")) {
+    const note = r.status === "completed"
+      ? "Verified by a second agent against the cited provisions."
+      : "Checked by a second agent, which sent it for analyst review.";
+    return `<p class="hint fake-banner" role="note">${icon("check")}<span>${note}</span></p>`;
+  }
   return "";
 }
 

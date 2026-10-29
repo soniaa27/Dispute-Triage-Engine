@@ -45,7 +45,7 @@ def worker_name() -> str:
 def main() -> None:
     settings = get_settings()
     configure_logging("worker", settings.log_level)
-    if settings.agent_mode == "investigator":
+    if settings.agent_mode in ("investigator", "graph"):
         # RQ runs each job in a forked child: load the retriever (index + embedding model,
         # ~5 s) and the LLM client here once, so every job inherits them.
         from agent.runner import warm_up

@@ -115,6 +115,7 @@ services:
       AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-12}
       AGENT_MAX_TOOL_CALLS: ${AGENT_MAX_TOOL_CALLS:-20}
       AGENT_MAX_WALL_CLOCK_SECONDS: ${AGENT_MAX_WALL_CLOCK_SECONDS:-75}
+      AGENT_MAX_VERIFY_RETRIES: ${AGENT_MAX_VERIFY_RETRIES:-1}
     depends_on:
       postgres:
         condition: service_healthy

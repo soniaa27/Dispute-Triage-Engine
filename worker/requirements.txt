@@ -16,3 +16,5 @@ faiss-cpu==1.15.1
 numpy==2.4.6
 # Versioned agent prompts (agent/prompts/*.yaml)
 pyyaml==6.0.3
+# Agent graph (agent/graph.py): Investigator -> Verifier with a bounded retry loop
+langgraph==1.2.18
