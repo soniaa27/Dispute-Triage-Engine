@@ -45,6 +45,13 @@ def worker_name() -> str:
 def main() -> None:
     settings = get_settings()
     configure_logging("worker", settings.log_level)
+    if settings.agent_mode == "investigator":
+        # RQ runs each job in a forked child: load the retriever (index + embedding model,
+        # ~5 s) and the LLM client here once, so every job inherits them.
+        from agent.runner import warm_up
+
+        warm_up()
+        log.info("agent_warmed_up", agent_mode=settings.agent_mode)
     redis = Redis.from_url(settings.redis_url)
     queue = Queue(settings.queue_name, connection=redis)
     worker = ContextWorker(

@@ -42,10 +42,11 @@ def _set_status(run_id: str, status: RunStatus, *, result=None, error=None) -> N
         run.error = error
 
 
-def run_with_timeout(req: DisputeRequest, run_id: str, timeout_s: float) -> RunResult:
+def run_with_timeout(req: DisputeRequest, run_id: str, timeout_s: float,
+                     mode: str = "fake") -> RunResult:
     """Call run_agent under a wall-clock limit. Raises TimeoutError if it is exceeded."""
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"run-{run_id[:8]}")
-    future = executor.submit(run_agent, req, run_id)
+    future = executor.submit(run_agent, req, run_id, mode=mode)
     try:
         return future.result(timeout=timeout_s)
     except FutureTimeout as exc:
@@ -78,7 +79,8 @@ def _process_run(run_id: str) -> str:
         log.info("run_started")
 
         req = DisputeRequest.model_validate(request_json)
-        result = run_with_timeout(req, run_id, get_settings().run_timeout_seconds)
+        settings = get_settings()
+        result = run_with_timeout(req, run_id, settings.run_timeout_seconds, settings.agent_mode)
         if result.run_id != run_id:
             raise ValueError("agent returned a result for a different run_id")
         if result.status not in _ACCEPTED_FINAL:
