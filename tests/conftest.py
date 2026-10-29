@@ -62,3 +62,19 @@ def client(database_url, redis, engine, tmp_path):
     app = create_app(settings=settings, redis=redis, engine=engine)
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="session")
+def real_corpus(tmp_path_factory):
+    """(data_dir, HybridRetriever) over the real chunks, embedded with the hash embedder (no
+    model download). Skips when the corpus PDFs are not present."""
+    from eval.corpus import corpus_available
+    from ingest.build import build
+    from ingest.embed import HashEmbedder
+    from retrieval import HybridRetriever
+
+    if not corpus_available():
+        pytest.skip("corpus PDFs not present")
+    out = tmp_path_factory.mktemp("corpus")
+    build(out_dir=out, embedder=HashEmbedder())
+    return out, HybridRetriever.load(out, embedder=HashEmbedder())
