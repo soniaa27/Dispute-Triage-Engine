@@ -57,7 +57,7 @@ def test_process_run_escalates_on_otp(worker_env, engine, payload):
 
 def test_process_run_timeout_marks_failed(worker_env, engine, payload, monkeypatch):
     monkeypatch.setattr(worker_env, "run_timeout_seconds", 0.1)
-    monkeypatch.setattr(tasks, "run_agent", lambda req, run_id: time.sleep(1))
+    monkeypatch.setattr(tasks, "run_agent", lambda req, run_id, mode: time.sleep(1))
     run_id = _make_run(engine, payload)
     assert tasks.process_run(run_id, "c") == "failed"
     run = _load(engine, run_id)
@@ -67,7 +67,7 @@ def test_process_run_timeout_marks_failed(worker_env, engine, payload, monkeypat
 
 
 def test_process_run_agent_exception_marks_failed(worker_env, engine, payload, monkeypatch):
-    def boom(req, run_id):
+    def boom(req, run_id, mode):
         raise RuntimeError("provider down")
 
     monkeypatch.setattr(tasks, "run_agent", boom)
