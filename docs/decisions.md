@@ -509,3 +509,50 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
   11.6's Jaeger data source and `make trace` call, keeping only `/api/v3`.
 - **Rejected:** Grafana with an admin password in `.env` (one more secret to manage for a
   local tool); Jaeger 1.x all-in-one (end of life).
+
+## D-035 Load tests: an agent-aware stub and its own rate-limit budget (rejected: the fixed stub reply, a fake agent, raising LLM_MAX_REQUESTS_PER_MINUTE)
+
+- The stub used to return one fixed text, which the Investigator rejects, so every stub run
+  escalated after one call and a load test measured almost nothing. The stub now answers
+  each agent call in the format the agent parses, keyed on the request's `step` and
+  `prompt_version` (bound by the gateway handler) and the prompt's own headers, with the
+  expected outcome of the eval scenario whose amount and report time the prompt contains.
+  Runs therefore take the same path as with a real model: two Investigator turns, the
+  Verifier's linked-clause lookups, conflict search and judge, hard rules, the
+  graph's limits and bookkeeping, tracing and metrics. 15 of the 24 scenarios complete, 9 escalate
+  (`tests/test_stub_agents.py`). Anything the stub does not recognise gets the old text.
+- The delay per call is `STUB_DELAY_MS`; `make loadtest-up` sets 4000, the SLO's figure.
+- The gateway's limiter models the free tier (4 per minute, 15 s apart). With the stub it
+  would make the provider's quota the bottleneck, which is not what the SLO is about, so
+  the stub has its own budget, `STUB_MAX_REQUESTS_PER_MINUTE` (6000). Only the budget
+  passed to the limiter changes (`llm_gateway/main.py`, `GatewaySettings`); the limiter is
+  unchanged and still on the path.
+- **Rejected:** keeping the fixed reply (no Verifier, no tool calls, no realistic run time);
+  AGENT_MODE=fake (skips retrieval, the graph and the gateway); raising
+  `LLM_MAX_REQUESTS_PER_MINUTE` for tests (one mistake away from hammering Gemini with it).
+
+## D-036 Load model: open-loop arrivals, measured from submission to final status
+
+- Each simulated analyst submits every `LOAD_PACING_SECONDS` regardless of how the system
+  is doing and polls each run in its own greenlet. A closed loop (submit, wait, submit)
+  would slow its own arrivals as the system slowed and hide the queue the SLO is about.
+- The measured request is "submit to final status" (Locust request type RUN), as
+  docs/slo.md defines it; the POST is recorded separately. Runs still unfinished when the
+  test ends count as slower than every finished one. The worker's
+  `run_end_to_end_seconds` gives the same measure from the server side.
+- Fresh transaction ids keep the duplicate cache out of the measurement, and a per-user
+  `X-Client-ID` (with `RATE_LIMIT_TRUST_CLIENT_ID=true`) makes the per-client limit see
+  separate analysts.
+
+## D-037 L2 and L3 variants are switches with the defaults unchanged
+
+- L2: `agent/prompts/verifier_v2.yaml` differs from v1 only in the check prompt's rule 3
+  (strict, claim-by-claim support); selected with `AGENT_VERIFIER_PROMPT_VERSION`, and
+  recorded in each run's prompt version (`inv-v1+ver-v2`).
+- L3: `RETRIEVAL_DOWNRANK_TABLES=true` halves the fused hybrid score of RBI Annex rows and
+  whole-table chunks. Off by default, so production retrieval is unchanged until the
+  before/after comparison says otherwise. Retrieval alone (complaint queries, no model):
+  hybrid recall@3 0.051 -> 0.085 and MRR 0.110 -> 0.125, but must-not-cite hits in the top
+  10 rise from 1 to 3; the full graph comparison decides.
+- The eval runner records agent mode, provider, models, both prompt versions and the
+  retrieval switch, and needs `--confirm-live` before a real agent calls a real provider.

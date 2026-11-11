@@ -71,6 +71,10 @@ services:
       LLM_FAULT_INJECTION: ${LLM_FAULT_INJECTION:-off}
       # ---------- Observability (docs/observability.md) ----------
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+      # ---------- Load testing (docs/load_test.md) ----------
+      # The rate limiter's budget when LLM_PROVIDER=stub (the free-tier limit above is for
+      # the real provider), so a load test measures this system, not the provider's quota.
+      STUB_MAX_REQUESTS_PER_MINUTE: ${STUB_MAX_REQUESTS_PER_MINUTE:-6000}
     # Loopback only: lets host tools (make eval with --judge-client gateway, the breaker demo)
     # reach the gateway without exposing it on the network.
     ports:
@@ -135,6 +139,9 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
       # Metrics of the forked work horses, served by the worker on port 9100.
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+      # ---------- Evaluation variants (docs/evaluation.md, L2 and L3) ----------
+      AGENT_VERIFIER_PROMPT_VERSION: ${AGENT_VERIFIER_PROMPT_VERSION:-v1}
+      RETRIEVAL_DOWNRANK_TABLES: ${RETRIEVAL_DOWNRANK_TABLES:-false}
     depends_on:
       postgres:
         condition: service_healthy
