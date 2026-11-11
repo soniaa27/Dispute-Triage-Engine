@@ -230,9 +230,34 @@ fields.
   definition-aware chunking instead of fixed-size chunks), run again, and compare. Report all
   four judged metrics plus the deterministic ones. Compare warns if the two reports used
   different scenario files.
-- **L6, live runs:** the same `LLMJudge.score` and `deterministic_metrics` apply to live
-  `RunResult`s. Live runs have no expected answer, so only the reference-free metrics apply:
-  citation resolution, groundedness, context relevance, faithfulness and hallucination rate.
-  Run them on a sample and chart them over time.
+- **L6, live runs:** see [Quality over time](#quality-over-time-live-runs) below.
 - **Changing the set:** never edit a scenario in place between runs being compared. Add new
   IDs instead. Reports record the scenario file's SHA-256.
+
+## Quality over time (live runs)
+
+Live runs have no expected answer, so only the reference-free judged metrics apply:
+groundedness, context relevance, faithfulness and hallucination rate, with the same prompts
+(`judge-v1`) and definitions as above (`LLMJudge.judge_run` scores one run; `score` sums them).
+
+- **What runs:** the `quality` service (`python -m quality run`, worker image) wakes every
+  `QUALITY_INTERVAL_SECONDS` (900), picks finished runs from the last
+  `QUALITY_LOOKBACK_HOURS` (24) that are in the sample and not yet scored, and judges up to
+  `QUALITY_MAX_PER_PASS` (1) of them. A run is in the sample when
+  `sha256(run_id)` as a fraction is below `QUALITY_SAMPLE_RATE` (0.2): reproducible, no state.
+  Runs without citations are skipped (nothing to ground).
+- **Where it goes:** one row per run in `quality_scores` (claim counts, the four scores,
+  judge model, run status, route and prompt version, or the judge error).
+- **Chart:** `http://localhost:8000/quality.html` (linked from the web client): headline
+  tiles, one line per metric per hour or day, analyst feedback for the same period, and a
+  table view. The data is `GET /quality?days=7&bucket=day` (`bucket=hour` up to 14 days),
+  which also breaks the scores down by prompt version, so a new version shows as a step.
+- **Cost:** 2 + (citations) model calls per judged run through llm-gateway, recorded in
+  `llm_calls` as `judge_*` steps under `judge-<run_id>`. At the defaults that is at most 4
+  runs an hour.
+- **When the model is unavailable** the pass stops and writes nothing; the run is judged on
+  a later pass. An unusable judge reply is stored as an error row and left out of averages.
+- **By hand:** `docker compose exec quality python -m quality once` (one pass now) and
+  `docker compose exec quality python -m quality report` (a table per day).
+- With `LLM_PROVIDER=stub` every judgement is an error row: the stub's reply is not JSON.
+

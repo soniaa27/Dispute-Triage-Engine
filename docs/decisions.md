@@ -377,3 +377,61 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
   default 75 s wall clock leaves. Live settings that let one retry finish are in
   [agents.md](agents.md) ("Limits"); with the defaults a retry escalates with
   "investigation limit reached".
+
+## D-025 Guardrails in code around every run (rejected: an LLM guard model, rejecting flagged requests)
+
+- **Where:** `agent.runner.run_agent` calls `guardrails.guard_input` before any agent and
+  `guard_output` after, in every `AGENT_MODE`, so the worker and `make eval` get the same
+  checks. The API runs the input detectors too, only to count them
+  (`guardrail_input_flags_total`).
+- **Injection** (`guardrails/injection.py`): instruction-like sentences and lines with a role
+  header ("SYSTEM:", "### SYSTEM OVERRIDE ###") are removed from the complaint before the
+  prompt is built; the prompts' `<complaint>` tags (rule 2) remain the second layer. The run
+  is not rejected: S22 to S24 are real disputes with an injection attached, and the expected
+  route is the normal one. No ordinary scenario is flagged (tested over all 21).
+- **Toxicity** (`guardrails/toxicity.py`): a term list. Profanity and insults are masked;
+  threats and self-harm skip the agents and escalate with a reason an analyst can act on.
+  Fraud words ("scam", "hacked", "fraudster") are deliberately not on the list.
+- **Output filter** (`guardrails/output.py`): the service may recommend, never act. Text that
+  says a credit or refund was made, that the dispute is closed or the decision final, or that
+  the customer committed fraud (S23's demand) is redacted, and a completed run becomes an
+  escalation with the citations kept. Toxic output is treated the same way.
+- **Rejected:** a guard model call per run (the free tier allows about 4 calls a minute,
+  which the agents need; a code check is free and explainable); rejecting flagged requests
+  (it would refuse customers with valid disputes and fail S22 to S24). Trade-off: a term
+  list misses paraphrased or misspelt attacks, so the prompt rules and the Verifier's hard
+  rules (D-023) stay in place behind it.
+
+## D-026 Duplicate cache and per-client rate limit in the API, in Redis (rejected: response caching of GET, a global limit)
+
+- **Cache:** the expensive thing is a run (model calls), not an HTTP response. The key holds
+  the agent mode but not the prompt version (the API does not know it): after deploying a
+  new prompt, clear the keys (`redis-cli --scan --pattern 'dispute-cache:*' | xargs
+  redis-cli del`) or wait out `CACHE_TTL_SECONDS`. A dispute
+  identical to one submitted within `CACHE_TTL_SECONDS` returns the first run's id
+  (`X-Cache: HIT`); the key is a SHA-256 of the validated request plus the agent mode. The
+  first submission claims the key with `SET NX`, so concurrent duplicates start one run.
+  Failed runs and transient escalations ("model unavailable", "investigation limit
+  reached") are not reused, so resubmitting after an outage works as the runbook says.
+- **Rate limit:** a fixed one-minute window per client IP on POST endpoints only (per
+  `X-Client-ID` only with `RATE_LIMIT_TRUST_CLIENT_ID=true`: the header is self-declared, so
+  trusting it by default would let a flooder rotate ids and escape the limit), checked before the body is read; 429 with `Retry-After`. Polling and
+  health checks are never limited. Redis down -> fail open and count it.
+- **Rejected:** caching `GET /runs` (cheap already, and it would serve stale statuses); one
+  global limit (a single noisy client would use everyone's share); a token bucket in Lua
+  (the fixed window is enough at this scale and works in fakeredis without Lua).
+- Measured effect on p95 and cost: [api_controls.md](api_controls.md).
+
+## D-027 Live quality: the eval judge on a hash-sampled share of runs, in its own service
+
+- The live scorer reuses `eval.metrics.LLMJudge` (split into `judge_run` per run), so live
+  and offline scores mean the same thing. Scores go to `quality_scores`; `GET /quality`
+  aggregates them per hour or day with analyst feedback, and `/quality.html` charts them.
+- **Sampling** by `sha256(run_id) < QUALITY_SAMPLE_RATE`: deterministic and stateless.
+- **Own service, not a worker job:** a judged run takes 2 + (citations) model calls, about a
+  minute at the free tier's rate. In a worker it would hold up disputes; as a separate
+  low-frequency loop (`QUALITY_MAX_PER_PASS`=1 every 15 min) it uses at most about a tenth
+  of the gateway's quota.
+- **Rejected:** scoring every run (doubles the model cost); judging inside the agent graph
+  (adds latency to every dispute); pushing scores to Prometheus (a gauge per run is not a
+  metric; the data is relational and lives with the runs it scores).

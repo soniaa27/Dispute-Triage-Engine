@@ -50,6 +50,15 @@ and recommends one of four routes, each backed by clause-level citations:
   shared step, tool-call and wall-clock limits.
 - **Never an unverified answer.** A draft that fails verification is sent back for one
   redraft, then escalated to an analyst.
+- **Guardrails in code.** Injected instructions are removed from the complaint before any
+  agent reads it; abusive text is masked, and threats or self-harm go straight to an analyst.
+  An output filter stops any result that claims a credit was issued, a dispute closed or the
+  customer guilty of fraud.
+- **Duplicate cache and per-client rate limiting.** A resubmitted dispute reuses its first
+  run instead of paying for the model again; each client gets its own POST budget (429 with
+  `Retry-After` beyond it).
+- **Quality over time.** A sample of live runs is scored by the evaluation's LLM judge and
+  charted at `/quality.html` next to analyst feedback.
 - **Resilient LLM gateway.** Timeouts, retries, a circuit breaker, rate limiting and
   per-step cost tracking. Providers are switched by configuration (`stub` or `gemini`).
 - **Asynchronous and scalable.** FastAPI enqueues runs on Redis; any number of RQ workers
@@ -66,7 +75,7 @@ client ──HTTP──▶ api (FastAPI) ──enqueue──▶ redis ──▶ 
                                    runs, quarantine, feedback
 ```
 
-Five services run under Docker Compose:
+Six services run under Docker Compose:
 
 | Service | Role |
 |---------|------|
@@ -75,6 +84,7 @@ Five services run under Docker Compose:
 | `redis` | Job queue |
 | `postgres` | Runs, quarantined requests, feedback and LLM call records |
 | `llm-gateway` | Single entry point to the model provider, with resilience and cost tracking |
+| `quality` | Scores a sample of finished runs with the LLM judge (worker image, own loop) |
 
 Deployment boundaries are described in [docs/architecture.md](docs/architecture.md).
 
@@ -123,7 +133,7 @@ The first build of the worker image also builds the corpus index: it downloads t
 embedding model (about 65 MB) and embeds the corpus, which takes a few minutes. Later
 builds reuse that layer until the PDFs, `ingest/` or `EMBED_MODEL` change.
 
-When all five services report healthy:
+When all six services report healthy:
 
 - web client: http://localhost:8000
 - interactive API docs: http://localhost:8000/docs
@@ -173,10 +183,11 @@ curl -s http://localhost:8000/runs/<run_id>
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/disputes` | Submit a dispute. `202 {run_id, status, status_url}` or `422 {detail, quarantine_id}` |
+| POST | `/disputes` | Submit a dispute. `202 {run_id, status, status_url}` (`X-Cache: HIT` if an identical dispute already has a run), `422 {detail, quarantine_id}` or `429` (rate limit, with `Retry-After`) |
 | GET | `/runs/{run_id}` | Status (`queued`, `running`, `completed`, `escalated`, `failed`) and the result when done |
 | POST | `/runs/{run_id}/feedback` | Analyst feedback: `{satisfactory: bool, reason: str}` |
 | GET | `/quarantine?limit=50` | Recently rejected requests with their errors |
+| GET | `/quality?days=7&bucket=day` | Judge scores of sampled live runs per day or hour, with analyst feedback (chart: `/quality.html`) |
 | GET | `/healthz` | Liveness |
 | GET | `/readyz` | Readiness (checks Redis and Postgres) |
 | GET | `/metrics` | Prometheus metrics |
@@ -235,6 +246,21 @@ the `llm-gateway` container only. To force the stub for one run without editing 
 
 Timeouts, retries, the circuit breaker, rate limiting and cost tracking are described in
 [docs/llm_gateway.md](docs/llm_gateway.md).
+
+### API rate limit and cache
+
+`RATE_LIMIT_PER_MINUTE` (default 10) caps POST requests per client per minute; a client is
+its IP (or its `X-Client-ID` header with `RATE_LIMIT_TRUST_CLIENT_ID=true`, which is off by
+default because the header is self-declared). `CACHE_TTL_SECONDS` (default 3600) is how long an
+identical dispute reuses its first run. `0` turns either off; turn the rate limit off (or
+trust `X-Client-ID` and send one per simulated user) for load tests. Measured effect:
+[docs/api_controls.md](docs/api_controls.md).
+
+### Quality monitoring
+
+The `quality` service judges `QUALITY_SAMPLE_RATE` of finished runs, at most
+`QUALITY_MAX_PER_PASS` every `QUALITY_INTERVAL_SECONDS`, through the same gateway and rate
+limit as the agents. See [docs/evaluation.md](docs/evaluation.md#quality-over-time-live-runs).
 
 ## Development
 
@@ -296,6 +322,8 @@ Running the evaluation against a real provider makes model calls; check your quo
 | `worker/` | RQ worker: status transitions, timeout and failure handling |
 | `agent/` | Agent runner, `investigator/`, `verifier/`, the LangGraph `graph.py` and versioned prompts in `prompts/` |
 | `llm_gateway/` | `/v1/complete`: providers, retry, circuit breaker, rate limit, cost tracking |
+| `guardrails/` | Input checks (injection, toxicity) and the output filter, applied around every run |
+| `quality/` | Live quality scorer: samples finished runs and scores them with the eval judge |
 | `ingest/` | Corpus pipeline: PDF text, clause chunking, verified tables, build manifest |
 | `retrieval/` | `HybridRetriever`: dense (FAISS) and keyword (BM25) search, clause lookup |
 | `eval/` | Scenarios, validator, batch runner, metrics, report comparison |
@@ -304,7 +332,7 @@ Running the evaluation against a real provider makes model calls; check your quo
 | `web/` | Static HTML and vanilla JS client |
 | `observability/` | Monitoring configuration |
 | `loadtest/` | Locust load test |
-| `scripts/` | Smoke test, breaker demo, cost report, corpus hashing |
+| `scripts/` | Smoke test, breaker demo, cost report, corpus hashing, cache and rate-limit measurement |
 | `tests/` | Unit and integration tests |
 | `docs/` | Architecture, agents, decisions, interfaces, evaluation, runbook, incident log |
 
@@ -316,6 +344,7 @@ Running the evaluation against a real provider makes model calls; check your quo
 - [Agent interfaces and clause ID conventions](docs/interfaces.md)
 - [Evaluation set and metrics](docs/evaluation.md)
 - [LLM gateway: providers, resilience, cost](docs/llm_gateway.md)
+- [API cache and rate limit: measured effect](docs/api_controls.md)
 - [Runbook](docs/runbook.md)
 - [Incident log](docs/incident_log.md)
 - [Corpus sources](corpus/README.md)
