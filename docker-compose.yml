@@ -11,6 +11,14 @@ x-python-healthcheck: &py-healthcheck
   retries: 5
   start_period: 15s
 
+# Shared by api and worker.
+x-app-env: &app-env
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: ${DATABASE_URL:?set in .env}
+  REDIS_URL: ${REDIS_URL:?set in .env}
+  QUEUE_NAME: ${QUEUE_NAME:-disputes}
+  RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-90}
+
 services:
   postgres:
     image: postgres:16.4-alpine
@@ -80,12 +88,15 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
-    environment: &app-env
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      DATABASE_URL: ${DATABASE_URL:?set in .env}
-      REDIS_URL: ${REDIS_URL:?set in .env}
-      QUEUE_NAME: ${QUEUE_NAME:-disputes}
-      RUN_TIMEOUT_SECONDS: ${RUN_TIMEOUT_SECONDS:-90}
+    environment:
+      <<: *app-env
+      # Per-client rate limit on POST endpoints and the duplicate-dispute cache (D7).
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-10}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      RATE_LIMIT_TRUST_CLIENT_ID: ${RATE_LIMIT_TRUST_CLIENT_ID:-false}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-3600}
+      # Runs from one agent mode are never reused for another.
+      CACHE_NAMESPACE: ${AGENT_MODE:-fake}
     ports:
       - "${API_HOST_PORT:-8000}:8000"
     depends_on:
@@ -130,6 +141,31 @@ services:
       <<: *py-healthcheck
       test: ["CMD", "python", "-m", "worker.healthcheck"]
     stop_grace_period: 30s
+    restart: unless-stopped
+
+  # Quality over time (L6): scores a sample of finished runs with the eval's LLM judge.
+  # Same image as the worker (it needs eval/ and the judge's dependencies), different command.
+  quality:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+      args:
+        EMBED_MODEL: ${EMBED_MODEL:-BAAI/bge-small-en-v1.5}
+    command: ["python", "-m", "quality", "run"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
+      LLM_GATEWAY_URL: ${LLM_GATEWAY_URL:?set in .env}
+      LLM_REQUEST_DEADLINE_SECONDS: ${LLM_REQUEST_DEADLINE_SECONDS:-60}
+      QUALITY_SAMPLE_RATE: ${QUALITY_SAMPLE_RATE:-0.2}
+      QUALITY_INTERVAL_SECONDS: ${QUALITY_INTERVAL_SECONDS:-900}
+      QUALITY_MAX_PER_PASS: ${QUALITY_MAX_PER_PASS:-1}
+      QUALITY_LOOKBACK_HOURS: ${QUALITY_LOOKBACK_HOURS:-24}
+    depends_on:
+      api:
+        condition: service_healthy
+      llm-gateway:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

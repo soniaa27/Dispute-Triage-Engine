@@ -7,6 +7,10 @@ AGENT_MODE (worker settings) picks what runs:
 - graph: the LangGraph graph, Investigator then Verifier (agent/graph.py), prompt_version
   "inv-<version>+ver-<version>". Only a verified draft completes; everything else escalates.
 
+Every mode runs between the guardrails (guardrails/, docs/decisions.md D-025): the agents
+see the complaint with injected instructions removed, threats and self-harm skip the agents
+and escalate, and every result passes the output filter.
+
 Keep the signature and the RunResult contract unchanged so the worker and API need no edits.
 
 In investigator and graph mode a run never returns a confident answer it did not finish:
@@ -30,6 +34,7 @@ from contracts import Channel, Citation, DisputeRequest, FraudType, Route, RunRe
 from contracts.agent import AgentState, InvestigatorOutput
 from contracts.llm import LLMClient, LLMUnavailableError
 from contracts.tools import Retriever
+from guardrails.pipeline import blocked_result, guard_input, guard_output
 
 AgentMode = Literal["fake", "investigator", "graph"]
 
@@ -103,13 +108,20 @@ def run_fake(req: DisputeRequest, run_id: str) -> RunResult:
 
 
 def run_agent(req: DisputeRequest, run_id: str, mode: AgentMode = "fake") -> RunResult:
+    """Every mode runs between the guardrails (guardrails/pipeline.py): the agents see the
+    sanitised complaint, and every result passes the output filter before it is returned."""
+    if mode not in ("graph", "investigator", "fake"):
+        raise ValueError(f"unknown AGENT_MODE {mode!r}")
+    guarded = guard_input(req)
+    if guarded.blocked:
+        return blocked_result(guarded, run_id)
     if mode == "graph":
-        return run_graph_mode(req, run_id)
-    if mode == "investigator":
-        return run_investigator(req, run_id)
-    if mode == "fake":
-        return run_fake(req, run_id)
-    raise ValueError(f"unknown AGENT_MODE {mode!r}")
+        result = run_graph_mode(guarded.request, run_id)
+    elif mode == "investigator":
+        result = run_investigator(guarded.request, run_id)
+    else:
+        result = run_fake(guarded.request, run_id)
+    return guard_output(result, guarded)
 
 
 # ---------- Investigator (AGENT_MODE=investigator) ----------

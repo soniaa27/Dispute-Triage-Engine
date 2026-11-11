@@ -1,4 +1,4 @@
-"""FastAPI app: dispute ingestion, run status, quarantine, feedback, health, metrics.
+"""FastAPI app: dispute ingestion, run status, quarantine, feedback, quality, health, metrics.
 
 Run with:  uvicorn --factory api.main:create_app
 """
@@ -6,10 +6,10 @@ Run with:  uvicorn --factory api.main:create_app
 import json
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import structlog
-from fastapi import FastAPI, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -19,11 +19,24 @@ from rq import Queue
 from sqlalchemy import select, text
 from sqlalchemy.engine import Engine
 
-from api.metrics import DISPUTES_ACCEPTED, DISPUTES_QUARANTINED
+from api.controls import (
+    DisputeCache,
+    RateLimiter,
+    client_id,
+    dispute_key,
+    reusable,
+)
+from api.metrics import (
+    CACHE_REQUESTS,
+    DISPUTES_ACCEPTED,
+    DISPUTES_QUARANTINED,
+    GUARDRAIL_INPUT_FLAGS,
+)
 from api.middleware import CorrelationIdMiddleware
 from api.settings import ApiSettings
 from common.db import Feedback, Quarantine, Run, init_db, make_engine, make_session_factory
 from common.logging import configure_logging
+from common.quality import summarize
 from contracts import (
     DisputeAccepted,
     DisputeRequest,
@@ -33,6 +46,7 @@ from contracts import (
     RunStatus,
     RunView,
 )
+from guardrails import check_toxicity, detect_injection
 
 # Job function path; the API never imports worker/agent code.
 JOB_FUNC = "worker.tasks.process_run"
@@ -47,6 +61,17 @@ def _validation_errors(exc: ValidationError) -> list[dict[str, Any]]:
     return json.loads(exc.json(include_url=False))
 
 
+def _count_guardrail_flags(dispute: DisputeRequest) -> None:
+    """Count what the input guardrails will find; the worker enforces them."""
+    injection = detect_injection(dispute.complaint_text)
+    if injection.flagged:
+        GUARDRAIL_INPUT_FLAGS.labels("injection").inc()
+    for category in check_toxicity(injection.sanitized_text).categories:
+        GUARDRAIL_INPUT_FLAGS.labels(category).inc()
+    if injection.flagged:
+        log.warning("guardrail_input_flagged", injection_rules=injection.rules)
+
+
 def create_app(
     settings: ApiSettings | None = None,
     redis: Redis | None = None,
@@ -58,6 +83,26 @@ def create_app(
     redis = redis or Redis.from_url(settings.redis_url)
     session_factory = make_session_factory(engine)
     queue = Queue(settings.queue_name, connection=redis)
+    limiter = RateLimiter(redis, settings.rate_limit_per_minute,
+                          settings.rate_limit_window_seconds)
+    cache = DisputeCache(redis, settings.cache_ttl_seconds, settings.cache_namespace)
+
+    def rate_limit(request: Request, response: Response) -> None:
+        """Per-client limit on POST endpoints (api/controls.py); 429 over the limit."""
+        if not limiter.enabled:
+            return
+        client = client_id(request, trust_header=settings.rate_limit_trust_client_id)
+        decision = limiter.check(client)
+        headers = {"X-RateLimit-Limit": str(decision.limit),
+                   "X-RateLimit-Remaining": str(decision.remaining)}
+        if not decision.allowed:
+            log.warning("rate_limited", client=client)
+            raise HTTPException(
+                status_code=429, detail="rate limit exceeded: too many requests from this "
+                f"client, retry in {decision.retry_after} s",
+                headers={**headers, "Retry-After": str(decision.retry_after)},
+            )
+        response.headers.update(headers)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -94,7 +139,11 @@ def create_app(
         "/disputes",
         status_code=202,
         response_model=DisputeAccepted,
-        responses={422: {"description": "Rejected and quarantined, with field-level errors"}},
+        responses={
+            422: {"description": "Rejected and quarantined, with field-level errors"},
+            429: {"description": "Rate limit exceeded for this client; see Retry-After"},
+        },
+        dependencies=[Depends(rate_limit)],
         openapi_extra={
             "requestBody": {
                 "required": True,
@@ -106,8 +155,11 @@ def create_app(
             }
         },
     )
-    async def submit_dispute(request: Request):
-        """Validate a dispute against the data contract; enqueue it or quarantine it."""
+    async def submit_dispute(request: Request, response: Response):
+        """Validate a dispute against the data contract; enqueue it or quarantine it.
+
+        An identical dispute submitted again within CACHE_TTL_SECONDS gets the first run's
+        id back (X-Cache: HIT) instead of a new run."""
         body = await request.body()
         raw = body.decode("utf-8", errors="replace")
         try:
@@ -119,7 +171,34 @@ def create_app(
                 status_code=422, content={"detail": errors, "quarantine_id": quarantine_id}
             )
 
+        _count_guardrail_flags(dispute)
         run_id = str(uuid.uuid4())
+        key, cache_header = None, "BYPASS"
+        if cache.enabled:
+            key = dispute_key(dispute, cache.namespace)
+            claimed, existing = cache.claim(key, run_id)
+            if not claimed and existing is None:  # Redis unavailable: no caching this time
+                key = None
+            elif existing is not None:
+                with session_factory() as session:
+                    cached = session.get(Run, existing)
+                    status = cached.status if cached else None
+                    result_json = cached.result_json if cached else None
+                if reusable(status, result_json):
+                    CACHE_REQUESTS.labels("hit").inc()
+                    request.state.run_id = existing
+                    response.headers["X-Cache"] = "HIT"
+                    log.info("dispute_cache_hit", run_id=existing, cached_status=status)
+                    return DisputeAccepted(run_id=existing, status=status,
+                                           status_url=f"/runs/{existing}")
+                CACHE_REQUESTS.labels("stale").inc()
+                cache.take_over(key, run_id)
+                cache_header = "MISS"
+            else:
+                CACHE_REQUESTS.labels("miss").inc()
+                cache_header = "MISS"
+        response.headers["X-Cache"] = cache_header
+
         structlog.contextvars.bind_contextvars(run_id=run_id)
         request.state.run_id = run_id
         correlation_id = request.state.correlation_id
@@ -147,6 +226,8 @@ def create_app(
                 run = session.get(Run, run_id)
                 run.status = RunStatus.failed
                 run.error = f"enqueue failed: {exc}"
+            if key:
+                cache.release(key, run_id)
             log.exception("enqueue_failed")
             raise HTTPException(status_code=503, detail="queue unavailable") from exc
 
@@ -172,7 +253,8 @@ def create_app(
                 error=run.error,
             )
 
-    @app.post("/runs/{run_id}/feedback", status_code=201, response_model=FeedbackAccepted)
+    @app.post("/runs/{run_id}/feedback", status_code=201, response_model=FeedbackAccepted,
+              dependencies=[Depends(rate_limit)])
     def post_feedback(run_id: str, feedback: FeedbackRequest):
         with session_factory.begin() as session:
             if session.get(Run, run_id) is None:
@@ -203,6 +285,15 @@ def create_app(
                 }
                 for r in rows
             ]
+
+    @app.get("/quality")
+    def quality(days: int = Query(7, ge=1, le=90),
+                bucket: Literal["hour", "day"] = Query("day")):
+        """Live quality over time (L6): LLM-judge scores of sampled runs, per bucket, with
+        analyst feedback. Written by the quality scorer (python -m quality run)."""
+        if bucket == "hour" and days > 14:
+            raise HTTPException(status_code=422, detail="bucket=hour allows at most 14 days")
+        return summarize(session_factory, days=days, bucket=bucket)
 
     @app.get("/healthz")
     def healthz():

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quality over time</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="styles.css?v=2">
+  <style>
+    .viz-root {
+      color-scheme: light;
+      --surface-1: #ffffff;
+      --text-primary: #1b2329;
+      --text-secondary: #56626d;
+      --grid: #e6e9ec;
+      --axis: #c3cbd2;
+      --series-1: #2a78d6;
+      --series-2: #eb6834;
+      --series-3: #1baf7a;
+      --series-4: #eda100;
+    }
+    /* Light only, like web/styles.css: a dark chart panel inside the light page would clash.
+       Add the validated dark steps (#3987e5 #d95926 #199e70 #c98500 on #1a1a19) when the
+       site gets a dark theme. */
+    .q-wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    .q-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+    .q-controls label { display: block; font-size: .85rem; color: var(--c-text-muted); margin-bottom: 4px; }
+    .viz-root { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--c-border);
+                border-radius: 8px; padding: 16px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .tile { padding: 8px 4px; }
+    .tile__label { font-size: .8rem; color: var(--text-secondary); }
+    .tile__value { font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .tile__note { font-size: .75rem; color: var(--text-secondary); }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: .85rem; color: var(--text-secondary); margin: 4px 0 8px; }
+    .legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; margin-right: 6px;
+                           vertical-align: middle; background: var(--swatch); }
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .chart text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .tip { position: absolute; pointer-events: none; background: var(--surface-1); color: var(--text-primary);
+           border: 1px solid var(--axis); border-radius: 6px; padding: 8px 10px; font-size: .8rem;
+           box-shadow: 0 2px 8px rgb(0 0 0 / .12); white-space: nowrap; }
+    .tip i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 6px; }
+    .tip b { font-variant-numeric: tabular-nums; }
+    .q-empty { padding: 32px; text-align: center; color: var(--text-secondary); }
+    .q-table td, .q-table th { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <div class="brand">
+        <div>
+          <h1 class="brand__title">Quality over time</h1>
+          <p class="brand__subtitle">LLM-judge scores of a sample of live runs, with analyst feedback · <a href="./">Back to triage</a></p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="q-wrap">
+    <p class="hint">A sample of finished runs (<code>QUALITY_SAMPLE_RATE</code>) is scored by the same judge as the
+      offline evaluation (docs/evaluation.md). Higher is better, except hallucination rate.</p>
+    <div class="q-controls">
+      <div>
+        <label for="q-range">Range</label>
+        <select id="q-range">
+          <option value="1|hour">Last 24 hours, hourly</option>
+          <option value="7|day" selected>Last 7 days, daily</option>
+          <option value="30|day">Last 30 days, daily</option>
+          <option value="90|day">Last 90 days, daily</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn--secondary" id="q-refresh">Refresh</button>
+      <span class="hint" id="q-status" aria-live="polite"></span>
+    </div>
+
+    <section class="viz-root" aria-labelledby="q-title">
+      <h2 id="q-title" class="panel__title">Judge scores per <span id="q-bucket">day</span></h2>
+      <div class="tiles" id="q-tiles"></div>
+      <div class="legend" id="q-legend"></div>
+      <div class="chart" id="q-chart"></div>
+    </section>
+
+    <details class="details" style="margin-top:16px">
+      <summary>Table view</summary>
+      <div class="details__body"><div class="table-wrap" id="q-table"></div></div>
+    </details>
+    <details class="details">
+      <summary>Most recent scored runs</summary>
+      <div class="details__body"><div class="table-wrap" id="q-recent"></div></div>
+    </details>
+  </main>
+  <script src="quality.js?v=1"></script>
+</body>
+</html>

@@ -29,8 +29,12 @@ RUN python -m ingest build && python -m ingest status \
 ENV HF_HUB_OFFLINE=1
 
 COPY retrieval retrieval
+COPY guardrails guardrails
 COPY agent agent
 COPY worker worker
+# The quality scorer (python -m quality run) runs from this image and uses the eval judge.
+COPY eval eval
+COPY quality quality
 
 USER app
 CMD ["python", "-m", "worker.main"]

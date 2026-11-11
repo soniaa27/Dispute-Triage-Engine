@@ -14,6 +14,7 @@ RUN pip install -r api/requirements.txt
 
 COPY contracts contracts
 COPY common common
+COPY guardrails guardrails
 COPY api api
 COPY web web
 

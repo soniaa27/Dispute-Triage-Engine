@@ -1,4 +1,4 @@
-"""Persistence for runs, quarantined requests, feedback and LLM calls.
+"""Persistence for runs, quarantined requests, feedback, LLM calls and quality scores.
 
 Tables are created with `create_all` by the API at startup (only the API, to avoid
 concurrent DDL from scaled workers). Move to Alembic once the schema settles.
@@ -91,6 +91,34 @@ class LlmCall(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )
+
+
+class QualityScore(Base):
+    """LLM-judge scores for one sampled live run (requirement L6). Written by the quality
+    scorer (quality/), read by GET /quality. One row per run: a run is judged once."""
+
+    __tablename__ = "quality_scores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id"), unique=True, index=True)
+    run_status: Mapped[str] = mapped_column(String(16))
+    route: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(64), index=True)
+    # When the run finished (runs.updated_at): the time axis of the quality chart.
+    run_finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    citations: Mapped[int] = mapped_column(Integer, default=0)
+    claims: Mapped[int] = mapped_column(Integer, default=0)
+    supported_claims: Mapped[int] = mapped_column(Integer, default=0)
+    unsupported_claims: Mapped[int] = mapped_column(Integer, default=0)
+    groundedness: Mapped[float | None] = mapped_column(Float, nullable=True)
+    context_relevance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    faithful: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    hallucination_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    judge_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    judge_prompt_version: Mapped[str] = mapped_column(String(32))
+    # Set when the judge's reply was unusable; the scores are then null.
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 def make_engine(database_url: str) -> Engine:

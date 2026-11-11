@@ -27,6 +27,8 @@ def web_client(database_url, redis, engine):
         ("/", "text/html"),
         ("/styles.css", "text/css"),
         ("/app.js", "javascript"),
+        ("/quality.html", "text/html"),
+        ("/quality.js", "javascript"),
     ],
 )
 def test_page_and_assets_are_served(web_client, path, content_type):
