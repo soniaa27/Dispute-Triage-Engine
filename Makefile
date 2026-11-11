@@ -77,3 +77,15 @@ llm-breaker-demo: env ## fault injection -> breaker opens -> 503 fast-fail -> re
 
 llm-cost-report: ## tokens and cost per run and per step from llm_calls (ARGS="--since-hours 24")
 	docker compose exec llm-gateway python scripts/cost_report.py $(ARGS)
+
+# ---------- Observability (docs/observability.md) ----------
+.PHONY: trace observability-urls
+
+trace: ## reconstruct one run from Postgres and its trace: make trace RUN=<run_id>
+	@test -n "$(RUN)" || (echo "usage: make trace RUN=<run_id>"; exit 2)
+	@docker compose exec -T llm-gateway python scripts/trace_run.py '$(RUN)'
+
+observability-urls: ## where to open Grafana, Jaeger and Prometheus
+	@echo "Grafana     http://localhost:3300  (dashboard: Dispute triage)"
+	@echo "Jaeger      http://localhost:16686"
+	@echo "Prometheus  http://localhost:9090/targets"
