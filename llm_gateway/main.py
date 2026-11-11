@@ -75,7 +75,8 @@ def create_app(settings: GatewaySettings | None = None, *, redis: Redis | None =
         reset_seconds=settings.llm_cb_reset_seconds,
         trial_ttl_seconds=settings.llm_request_deadline_seconds + 5,
     )
-    limiter = RateLimiter(redis, requests_per_minute=settings.llm_max_requests_per_minute)
+    # The stub has its own budget (STUB_MAX_REQUESTS_PER_MINUTE): see docs/load_test.md.
+    limiter = RateLimiter(redis, requests_per_minute=settings.limiter_requests_per_minute)
     service = LLMService(
         settings, provider or build_provider(settings), breaker, limiter, sleep=sleep,
         on_retry=RETRIES.inc, on_breaker_change=lambda s: CIRCUIT.set(STATE_GAUGE[s]),
@@ -85,7 +86,7 @@ def create_app(settings: GatewaySettings | None = None, *, redis: Redis | None =
     app.state.service = service
     instrument_gateway(app)  # tracing (docs/observability.md)
     log.info("gateway_started", provider=settings.llm_provider, model=settings.model_name,
-             max_requests_per_minute=settings.llm_max_requests_per_minute,
+             max_requests_per_minute=settings.limiter_requests_per_minute,
              fault_injection=settings.llm_fault_injection)
     if settings.llm_fault_injection != "off":
         log.warning("FAULT INJECTION ENABLED: every provider call will fail",
@@ -157,7 +158,7 @@ def create_app(settings: GatewaySettings | None = None, *, redis: Redis | None =
         CIRCUIT.set(STATE_GAUGE[BreakerState(snapshot["state"])])
         return {**snapshot, "provider": settings.llm_provider,
                 "fault_injection": settings.llm_fault_injection,
-                "max_requests_per_minute": settings.llm_max_requests_per_minute}
+                "max_requests_per_minute": settings.limiter_requests_per_minute}
 
     @app.get("/healthz")
     def healthz():

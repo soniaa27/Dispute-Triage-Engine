@@ -20,7 +20,7 @@ agent / eval judge ──HttpLLMClient──▶ POST /v1/complete
 
 | Value | File | Use |
 |-------|------|-----|
-| `stub` | `providers/stub.py` | Fixed response after `STUB_DELAY_MS`, approximate token counts. No key. Dev, CI, load tests. Default in `.env.example`. |
+| `stub` | `providers/stub.py` | Simulated model after `STUB_DELAY_MS`, approximate token counts. No key. Agent calls (`step` investigator with a `v<n>` prompt, verifier with `verifier_v<n>`) get a correctly formatted, deterministic reply based on the eval scenario the prompt's case facts match, so stub runs go through the whole graph; anything else gets a fixed text. Dev, CI, load tests ([load_test.md](load_test.md)). Default in `.env.example`. |
 | `gemini` | `providers/gemini.py` | Google Gemini through the official `google-genai` SDK. Needs `LLM_MODEL` and `LLM_API_KEY`. |
 
 Every provider implements `providers/base.py: Provider`:
@@ -157,7 +157,9 @@ a per-minute quota. Each retry attempt takes a token too. A request waits up to
 The default of 4 requests per minute stays under the lowest free-tier Flash limit published
 for Gemini (5 RPM). Google shows a project's actual limits only in AI Studio
 (https://aistudio.google.com/rate-limit). Raise the setting only after checking them. Daily
-quotas (RPD) are not enforced by the gateway. When a daily quota runs out, Gemini answers
+quotas (RPD) are not enforced by the gateway. With `LLM_PROVIDER=stub` the bucket is refilled at
+`STUB_MAX_REQUESTS_PER_MINUTE` (default 6000) instead, so a load test measures this system and
+not a free-tier quota; `/v1/breaker` reports the budget in effect. When a daily quota runs out, Gemini answers
 429 until midnight Pacific time; the breaker opens, and the agents escalate.
 
 ## Cost and token tracking (L5)

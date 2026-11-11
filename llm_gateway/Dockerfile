@@ -20,6 +20,8 @@ COPY llm_gateway llm_gateway
 COPY scripts/cost_report.py scripts/cost_report.py
 # Run reconstruction (make trace RUN=<run_id>): reads runs and llm_calls, and Jaeger.
 COPY scripts/trace_run.py scripts/trace_run.py
+# The stub answers agent calls from the eval scenarios (providers/stub.py, load tests).
+COPY eval/scenarios.jsonl eval/scenarios.jsonl
 
 USER app
 EXPOSE 8100

@@ -12,9 +12,12 @@ from llm_gateway.settings import GatewaySettings
 
 
 def _stub(settings: GatewaySettings) -> Provider:
-    from llm_gateway.providers.stub import StubProvider
+    from pathlib import Path
 
-    return StubProvider(settings.stub_delay_ms)
+    from llm_gateway.providers.stub import AgentReplies, StubProvider
+
+    return StubProvider(settings.stub_delay_ms,
+                        AgentReplies.load(Path(settings.stub_scenarios_path)))
 
 
 def _gemini(settings: GatewaySettings) -> Provider:
