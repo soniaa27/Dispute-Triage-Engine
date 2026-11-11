@@ -17,3 +17,6 @@ class WorkerSettings(BaseSettings):
     # graph: Investigator + Verifier (LangGraph). The last two need LLM_PROVIDER=gemini on
     # the gateway (the stub's reply is not an agent reply, so every run escalates).
     agent_mode: Literal["fake", "investigator", "graph"] = "fake"
+    # Prometheus endpoint of this worker container (docs/observability.md); scraped inside
+    # the compose network only. Metrics need PROMETHEUS_MULTIPROC_DIR (set by docker compose).
+    metrics_port: int = 9100

@@ -3,18 +3,27 @@
 Status transitions: queued -> running -> completed | escalated | failed.
 Anything that goes wrong ends in `failed` with an error message: an incomplete run is
 never stored as a confident answer.
+
+Each job is one span of the run's trace, and its trace id is added to the run's trace list
+(docs/observability.md). Run metrics are recorded when the run ends.
 """
 
+import contextvars
+import time
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
+from datetime import UTC, datetime
 from functools import lru_cache
 
 import structlog
+from rq import get_current_job
 from sqlalchemy.orm import sessionmaker
 
 from agent.runner import run_agent
 from common.db import Run, make_engine, make_session_factory
+from common.tracing import trace_id
 from contracts import DisputeRequest, RunResult, RunStatus
+from worker.observability import end_run_span, record_run, run_span
 from worker.settings import WorkerSettings
 
 log = structlog.get_logger("worker.tasks")
@@ -46,7 +55,9 @@ def run_with_timeout(req: DisputeRequest, run_id: str, timeout_s: float,
                      mode: str = "fake") -> RunResult:
     """Call run_agent under a wall-clock limit. Raises TimeoutError if it is exceeded."""
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"run-{run_id[:8]}")
-    future = executor.submit(run_agent, req, run_id, mode=mode)
+    # A copy of the context: the agent's spans join the run's trace and its log lines keep
+    # run_id and correlation_id.
+    future = executor.submit(contextvars.copy_context().run, run_agent, req, run_id, mode=mode)
     try:
         return future.result(timeout=timeout_s)
     except FutureTimeout as exc:
@@ -64,33 +75,60 @@ def mark_failed(run_id: str, error: str) -> None:
 
 
 def process_run(run_id: str, correlation_id: str) -> str:
-    with structlog.contextvars.bound_contextvars(run_id=run_id, correlation_id=correlation_id):
-        return _process_run(run_id)
+    job = get_current_job()
+    with structlog.contextvars.bound_contextvars(run_id=run_id, correlation_id=correlation_id), \
+            run_span(run_id, correlation_id, job.meta if job else None) as span:
+        return _process_run(run_id, span)
 
 
-def _process_run(run_id: str) -> str:
+def _seconds(start, end) -> float:
+    # SQLite (tests) returns naive datetimes; they are UTC.
+    start = start if start.tzinfo else start.replace(tzinfo=UTC)
+    return (end - start).total_seconds()
+
+
+def _process_run(run_id: str, span) -> str:
+    started = datetime.now(UTC)
+    clock = time.perf_counter()
+    created_at = started
+    status, result, error, mode = RunStatus.failed, None, None, "unknown"
     try:
         with get_session_factory()() as session:
             run = session.get(Run, run_id)
             if run is None:
                 raise LookupError(f"run {run_id} not found")
             request_json = run.request_json
+            created_at = run.created_at or started
         _set_status(run_id, RunStatus.running)
         log.info("run_started")
 
         req = DisputeRequest.model_validate(request_json)
         settings = get_settings()
+        mode = settings.agent_mode
         result = run_with_timeout(req, run_id, settings.run_timeout_seconds, settings.agent_mode)
         if result.run_id != run_id:
             raise ValueError("agent returned a result for a different run_id")
         if result.status not in _ACCEPTED_FINAL:
             raise ValueError(f"agent returned non-final status {result.status!r}")
+        if tid := trace_id(span):
+            result = result.model_copy(update={
+                "trace": [*result.trace, {"step": "otel_trace", "trace_id": tid}]})
 
         _set_status(run_id, result.status, result=result.model_dump(mode="json"))
+        status = result.status
         log.info("run_finished", status=result.status, route=result.route)
         return result.status
     except Exception as exc:
         error = f"{exc.__class__.__name__}: {exc}"
+        result = None
         log.exception("run_failed", error=error)
         mark_failed(run_id, error)
         return RunStatus.failed
+    finally:
+        timings = dict(queue_wait_s=_seconds(created_at, started),
+                       processing_s=time.perf_counter() - clock,
+                       end_to_end_s=_seconds(created_at, datetime.now(UTC)))
+        end_run_span(span, str(status), route=str(result.route) if result else None,
+                     error=error, **timings)
+        record_run(str(status), mode, result.trace if result else None,
+                   **timings)
