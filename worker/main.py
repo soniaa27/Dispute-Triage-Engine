@@ -12,6 +12,8 @@ from redis import Redis
 from rq import Queue, Worker
 
 from common.logging import configure_logging
+from common.tracing import setup_tracing
+from worker.observability import start_metrics_server
 from worker.tasks import get_settings, mark_failed
 
 log = structlog.get_logger("worker")
@@ -45,6 +47,13 @@ def worker_name() -> str:
 def main() -> None:
     settings = get_settings()
     configure_logging("worker", settings.log_level)
+    # Tracing and metrics (docs/observability.md). The httpx instrumentation carries the
+    # trace to llm-gateway on every model call.
+    setup_tracing("worker")
+    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+    HTTPXClientInstrumentor().instrument()
+    start_metrics_server(settings.metrics_port, settings.agent_mode)
     if settings.agent_mode in ("investigator", "graph"):
         # RQ runs each job in a forked child: load the retriever (index + embedding model,
         # ~5 s) and the LLM client here once, so every job inherits them.

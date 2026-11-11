@@ -13,11 +13,15 @@ RUN useradd --create-home --uid 10001 app
 COPY llm_gateway/requirements.txt llm_gateway/requirements.txt
 RUN pip install -r llm_gateway/requirements.txt
 
-COPY common/__init__.py common/logging.py common/db.py common/
+COPY common/__init__.py common/logging.py common/db.py common/tracing.py common/
 COPY contracts contracts
 COPY llm_gateway llm_gateway
 # Cost report runs here: this container already reaches Postgres (make llm-cost-report).
 COPY scripts/cost_report.py scripts/cost_report.py
+# Run reconstruction (make trace RUN=<run_id>): reads runs and llm_calls, and Jaeger.
+COPY scripts/trace_run.py scripts/trace_run.py
+# The stub answers agent calls from the eval scenarios (providers/stub.py, load tests).
+COPY eval/scenarios.jsonl eval/scenarios.jsonl
 
 USER app
 EXPOSE 8100

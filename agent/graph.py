@@ -34,7 +34,7 @@ from agent.errors import LIMIT_REACHED, MODEL_UNAVAILABLE, ToolBudgetExceeded
 from agent.investigator import InvestigatorError, investigate
 from agent.llm_client import LLMGatewayError
 from agent.prompts import CURRENT_PROMPT_VERSION
-from agent.tracking import TracedLLM, TracedRetriever, ms_since
+from agent.tracking import TracedLLM, TracedRetriever, ms_since, traced_node
 from agent.verifier import CURRENT_VERIFIER_PROMPT_VERSION, VerifierError, verify_detailed
 from agent.verifier.citations import to_citation
 from contracts import Citation, DisputeRequest, Route, RunResult, RunStatus
@@ -54,6 +54,9 @@ class GraphSettings(BaseSettings):
 
     # Times the Investigator may redraft after the Verifier finds unsupported claims.
     max_verify_retries: int = Field(default=1, ge=0)
+    # Verifier prompt file agent/prompts/verifier_<version>.yaml (L2 variants; v1 default).
+    verifier_prompt_version: str = Field(default=CURRENT_VERIFIER_PROMPT_VERSION,
+                                         pattern=r"^v\d+$")
 
 
 class GraphState(AgentState):
@@ -252,10 +255,11 @@ def _finalize(ctx: RunContext) -> Callable[[GraphState], dict]:
 
 def build_graph(ctx: RunContext):
     graph = StateGraph(GraphState)
-    graph.add_node("investigate", _agent_node(ctx, "investigate",
-                                              lambda s: _investigate(ctx, s)))
-    graph.add_node("verify", _agent_node(ctx, "verify", lambda s: _verify(ctx, s)))
-    graph.add_node("finalize", _finalize(ctx))
+    graph.add_node("investigate", traced_node("investigate", _agent_node(
+        ctx, "investigate", lambda s: _investigate(ctx, s))))
+    graph.add_node("verify", traced_node("verify", _agent_node(
+        ctx, "verify", lambda s: _verify(ctx, s))))
+    graph.add_node("finalize", traced_node("finalize", _finalize(ctx)))
     graph.add_edge(START, "investigate")
     graph.add_conditional_edges("investigate", _after_investigate, ["verify", "finalize"])
     graph.add_conditional_edges("verify", _after_verify, ["investigate", "finalize"])
@@ -272,7 +276,8 @@ def run_graph(req: DisputeRequest, run_id: str, retriever: Retriever, llm: LLMCl
     trace: list[dict[str, Any]] = []
     ctx = RunContext(retriever=TracedRetriever(retriever, trace, state.max_tool_calls),
                      llm=TracedLLM(llm, trace), trace=trace,
-                     max_verify_retries=settings.max_verify_retries)
+                     max_verify_retries=settings.max_verify_retries,
+                     verifier_version=settings.verifier_prompt_version)
     # The step limit is enforced in the nodes; LangGraph's own limit is only a backstop.
     final = build_graph(ctx).invoke(state, {"recursion_limit": state.max_steps + 5})
     result: RunResult = final["result"]

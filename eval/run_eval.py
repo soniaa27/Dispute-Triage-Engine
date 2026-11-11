@@ -6,6 +6,13 @@ scores the results and writes eval/reports/<timestamp>_<label>.json and .md.
 The four LLM-judged metrics need an LLMClient: pass --judge-client gateway (HttpLLMClient to
 llm-gateway at LLM_GATEWAY_URL) or --judge-client module:factory, where factory() returns an
 object implementing contracts.llm.LLMClient. Without it they are reported as not computed.
+
+--agent-mode picks the agent (default AGENT_MODE, else fake): graph runs the real
+Investigator and Verifier through the LangGraph graph, with the local corpus index (make
+ingest) and the model behind llm-gateway at LLM_GATEWAY_URL. The report records the agent
+mode, the gateway's provider, the models that answered, the prompt versions and the
+retrieval setting. A real agent against a provider other than the stub needs --confirm-live
+(it spends quota; see docs/evaluation.md for the call budget).
 """
 
 import argparse
@@ -36,16 +43,18 @@ from eval.metrics import (
     judged_metrics,
 )
 from eval.schema import DEFAULT_SCENARIOS, Scenario, load_scenarios
+from retrieval.hybrid import downrank_from_env
 
 DEFAULT_OUT = Path(__file__).parent / "reports"
+AGENT_MODES = ("fake", "investigator", "graph")
 DEFAULT_TIMEOUT_S = float(os.environ.get("RUN_TIMEOUT_SECONDS", "90"))
 
 
-def run_one(scenario: Scenario, timeout_s: float) -> ScenarioRun:
+def run_one(scenario: Scenario, timeout_s: float, agent_mode: str = "fake") -> ScenarioRun:
     run_id = f"eval-{scenario.id}-{uuid.uuid4().hex[:8]}"
     started = time.perf_counter()
     executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(runner.run_agent, scenario.request, run_id)
+    future = executor.submit(runner.run_agent, scenario.request, run_id, mode=agent_mode)
     try:
         result = future.result(timeout=timeout_s)
         error = result.error
@@ -115,6 +124,10 @@ def markdown_summary(report: dict[str, Any]) -> str:
         f"- Agent prompt versions seen: {', '.join(meta['agent_prompt_versions']) or 'none'}",
         f"- Mean latency: {_fmt(meta['latency_ms_mean'])} ms",
         f"- Judge: {meta['judge']} (model: {meta.get('judge_model') or 'n/a'})",
+        f"- Agent mode: {meta.get('agent_mode', 'n/a')}; provider: {meta.get('provider', 'n/a')}"
+        f"; agent models: {', '.join(meta.get('agent_models') or []) or 'n/a'}",
+        f"- Verifier prompt: {meta.get('verifier_prompt_version', 'n/a')}; retrieval "
+        f"down-ranks tables and Annex rows: {meta.get('retrieval_downrank_tables', 'n/a')}",
         "",
         "## Metrics",
         "",
@@ -164,10 +177,30 @@ def load_judge_client(spec: str | None) -> LLMClient | None:
     return client
 
 
+def gateway_provider() -> str:
+    """The provider llm-gateway reports at LLM_GATEWAY_URL/healthz, or why it is unknown."""
+    url = os.environ.get("LLM_GATEWAY_URL")
+    if not url:
+        return "unknown (LLM_GATEWAY_URL not set)"
+    try:
+        import httpx
+
+        return httpx.get(f"{url.rstrip('/')}/healthz", timeout=3).json()["provider"]
+    except Exception as exc:
+        return f"unknown ({exc.__class__.__name__})"
+
+
+def _models(runs: list[ScenarioRun]) -> list[str]:
+    """Models that answered the agents' calls, from the runs' traces."""
+    return sorted({entry["model"] for r in runs if r.result for entry in r.result.trace
+                   if entry.get("step") == "llm" and entry.get("model")})
+
+
 def run_eval(
     scenarios: list[Scenario],
     *,
     prompt_version: str,
+    agent_mode: str = "fake",
     scenarios_file: Path,
     out_dir: Path,
     timeout_s: float = DEFAULT_TIMEOUT_S,
@@ -180,7 +213,7 @@ def run_eval(
         chunks = load_chunk_index()  # before the runs, so a missing build fails fast
     runs = []
     for scenario in scenarios:
-        run = run_one(scenario, timeout_s)
+        run = run_one(scenario, timeout_s, agent_mode)
         actual = run.result.route if run.result else run.error
         print(f"{scenario.id}: expected {scenario.expected.route}, got {actual} "
               f"({run.latency_ms:.0f} ms)")
@@ -202,6 +235,12 @@ def run_eval(
             "latency_ms_mean": round(sum(latencies) / len(latencies), 1) if latencies else None,
             "judge": judge_label,
             "judge_model": metrics.get("judge_model"),
+            "agent_mode": agent_mode,
+            "provider": gateway_provider() if agent_mode != "fake" or judge_client
+            else "none (fake agent)",
+            "agent_models": _models(runs),
+            "verifier_prompt_version": os.environ.get("AGENT_VERIFIER_PROMPT_VERSION", "v1"),
+            "retrieval_downrank_tables": downrank_from_env(),
         },
         "metrics": metrics,
         "scenarios": [scenario_record(r, chunks) for r in runs],
@@ -221,6 +260,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S,
                         help="per-scenario wall-clock limit in seconds")
+    parser.add_argument("--agent-mode", choices=AGENT_MODES,
+                        default=os.environ.get("AGENT_MODE", "fake"),
+                        help="agent to evaluate (default: AGENT_MODE, else fake)")
+    parser.add_argument("--confirm-live", action="store_true",
+                        help="allow a real agent against a provider other than the stub "
+                             "(spends quota)")
     parser.add_argument("--judge-client",
                         help="'gateway' (llm-gateway at LLM_GATEWAY_URL) or module:factory "
                              "returning an LLMClient")
@@ -236,10 +281,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit is not None:
         scenarios = scenarios[: args.limit]
 
+    if args.agent_mode != "fake":
+        provider = gateway_provider()
+        print(f"agent mode {args.agent_mode}, llm-gateway provider: {provider}")
+        if provider != "stub" and not args.confirm_live:
+            parser.error(f"llm-gateway reports provider {provider!r}: a {args.agent_mode} run "
+                         "makes real model calls. Re-run with --confirm-live to spend quota, "
+                         "or start the gateway with LLM_PROVIDER=stub.")
+
     try:
         report, json_path, md_path = run_eval(
             scenarios,
             prompt_version=args.prompt_version,
+            agent_mode=args.agent_mode,
             scenarios_file=args.scenarios,
             out_dir=args.out,
             timeout_s=args.timeout,

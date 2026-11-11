@@ -9,8 +9,13 @@ Both rankings see the same text the index was built from (section heading, paren
 lead-in, clause text); passages carry only the clause text.
 
 Tool-call counting and limits are the graph's job (AGENT_MAX_TOOL_CALLS), not this class.
+
+L3 experiment, off by default: with RETRIEVAL_DOWNRANK_TABLES=true (or downrank_tables=True),
+hybrid search multiplies the fused score of RBI Annex rows and whole-table chunks by
+DOWNRANK_FACTOR, so specific clauses and table rows rank above them (docs/evaluation.md).
 """
 
+import os
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
@@ -29,6 +34,10 @@ RRF_K = 60
 # How many of each ranking take part in the fusion.
 FUSION_DEPTH = 50
 
+# L3: chunks that match many queries but rarely decide a case.
+DOWNRANK_FACTOR = 0.5
+DOWNRANK_ENV = "RETRIEVAL_DOWNRANK_TABLES"
+
 Mode = Literal["hybrid", "dense", "keyword"]
 MODES: tuple[Mode, ...] = ("hybrid", "dense", "keyword")
 
@@ -37,13 +46,25 @@ def _key(doc_id: DocId | str, clause_id: str) -> str:
     return f"{DocId(doc_id)}{CITATION_SEPARATOR}{clause_id}"
 
 
+def _downranked(chunk: Chunk) -> bool:
+    """RBI Annex rows ("Annex-1" ... "Annex-8") and whole tables (their rows stay)."""
+    return chunk.kind == "table" or (chunk.doc_id == DocId.RBI_2017_CIRCULAR
+                                     and chunk.clause_id.startswith("Annex-"))
+
+
+def downrank_from_env() -> bool:
+    return os.environ.get(DOWNRANK_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
 class HybridRetriever:
     def __init__(self, chunks: list[Chunk], index: faiss.Index, ids: list[str],
-                 embedder: Embedder):
+                 embedder: Embedder, *, downrank_tables: bool | None = None):
         if ids != [c.citation_id for c in chunks]:
             raise ValueError("index ids do not match the chunks; rebuild: python -m ingest build")
         self._chunks = chunks
         self._index = index
+        self.downrank_tables = downrank_from_env() if downrank_tables is None \
+            else downrank_tables
         self._embedder = embedder
         by_id = {c.citation_id: c for c in chunks}
         self._bm25 = BM25([embedding_text(c, by_id) for c in chunks])
@@ -54,8 +75,8 @@ class HybridRetriever:
                 self._parts[_key(chunk.doc_id, chunk.base_clause_id)].append(chunk)
 
     @classmethod
-    def load(cls, data_dir: Path = DATA_DIR, embedder: Embedder | None = None
-             ) -> "HybridRetriever":
+    def load(cls, data_dir: Path = DATA_DIR, embedder: Embedder | None = None, *,
+             downrank_tables: bool | None = None) -> "HybridRetriever":
         """Load a built corpus. Queries are embedded with the model the index was built
         with (from the manifest), so the two always match."""
         manifest = read_manifest(data_dir)
@@ -67,7 +88,8 @@ class HybridRetriever:
         elif embedder.model_name != model:
             raise ValueError(f"index built with {model}, queries would use {embedder.model_name}")
         index, ids = load_index(data_dir / INDEX_DIR)
-        return cls(load_chunks(data_dir), index, ids, embedder)
+        return cls(load_chunks(data_dir), index, ids, embedder,
+                   downrank_tables=downrank_tables)
 
     def search_corpus(self, query: str, k: int = 5,
                       doc_ids: Sequence[DocId] | None = None) -> list[Passage]:
@@ -95,6 +117,10 @@ class HybridRetriever:
             for ranking in rankings:
                 for rank, (row, _) in enumerate(ranking[:FUSION_DEPTH], start=1):
                     fused[row] += 1 / (RRF_K + rank)
+            if self.downrank_tables:
+                for row in fused:
+                    if _downranked(self._chunks[row]):
+                        fused[row] *= DOWNRANK_FACTOR
             hits = sorted(fused.items(), key=lambda hit: (-hit[1], hit[0]))
         else:
             hits = rankings[0]

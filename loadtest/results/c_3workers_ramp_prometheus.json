@@ -1,0 +1,86 @@
+{
+  "window_seconds": 2123,
+  "workers": 3.0,
+  "runs_by_status": {
+    "escalated": 95.281,
+    "completed": 158.416
+  },
+  "run_end_to_end_s": {
+    "p50": 145.177,
+    "p95": 296.213
+  },
+  "run_queue_wait_s": {
+    "p50": 124.284,
+    "p95": 282.486
+  },
+  "run_processing_s": {
+    "p50": 16.128,
+    "p95": 22.61
+  },
+  "queue_depth": {
+    "max": 62.0,
+    "at_end": 0.0
+  },
+  "worker_utilisation_mean": 0.629,
+  "model_calls_by_step": {
+    "judge_claims": 1.003,
+    "judge_relevance": 3.01,
+    "judge_faithfulness": 1.003,
+    "investigator": 519.569,
+    "verifier": 322.981
+  },
+  "gateway_latency_s": {
+    "p50": 6.0,
+    "p95": 7.8
+  },
+  "agent_node_p95_s": {
+    "finalize": 0.048,
+    "verify": 14.437,
+    "investigate": 14.65
+  },
+  "api_latency_p95_s": {
+    "/readyz": 0.057,
+    "/disputes": 1.009,
+    "/runs/{run_id}": 0.204
+  },
+  "api_requests_by_status": {
+    "200": 30867.472,
+    "202": 259.855
+  },
+  "cpu_cores_mean": {
+    "jaeger": 0.008,
+    "llm-gateway": 0.052,
+    "postgres": 0.081,
+    "redis": 0.018,
+    "worker": 0.556,
+    "api": 0.154,
+    "cadvisor": 0.098,
+    "prometheus": 0.035,
+    "grafana": 0.015,
+    "quality": 0.003
+  },
+  "cpu_cores_max": {
+    "jaeger": 0.045,
+    "llm-gateway": 0.222,
+    "postgres": 0.337,
+    "redis": 0.063,
+    "worker": 2.134,
+    "api": 0.409,
+    "cadvisor": 0.66,
+    "prometheus": 0.217,
+    "grafana": 0.079,
+    "quality": 0.084
+  },
+  "memory_mib_max": {
+    "jaeger": 54,
+    "llm-gateway": 167,
+    "postgres": 53,
+    "redis": 15,
+    "worker": 952,
+    "api": 172,
+    "cadvisor": 162,
+    "prometheus": 133,
+    "grafana": 142,
+    "quality": 156
+  }
+}

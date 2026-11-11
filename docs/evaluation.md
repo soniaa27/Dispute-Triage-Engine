@@ -28,6 +28,8 @@ make eval-compare A=eval/reports/<a>.json B=eval/reports/<b>.json
 | `--out` | Report directory (default `eval/reports/`, git-ignored) |
 | `--timeout` | Per-scenario limit in seconds (default `RUN_TIMEOUT_SECONDS` or 90) |
 | `--judge-client` | `gateway` (HttpLLMClient to llm-gateway; `make eval` points it at `localhost:8100`) or `module:factory` returning a `contracts.llm.LLMClient`, for the four judged metrics |
+| `--agent-mode` | `fake`, `investigator` or `graph` (default `AGENT_MODE`, else `fake`). `graph` runs the Investigator and Verifier in-process with the local index (`make ingest`) and the model behind llm-gateway at `LLM_GATEWAY_URL` |
+| `--confirm-live` | Required when a real agent would call a provider other than the stub (it spends quota). Without it the runner stops before the first call |
 
 The runner calls `agent.runner.run_agent` directly, in-process, with whatever implementation
 is current. Each run writes `eval/reports/<UTC timestamp>_<label>.json` (full per-scenario
@@ -233,6 +235,101 @@ fields.
 - **L6, live runs:** see [Quality over time](#quality-over-time-live-runs) below.
 - **Changing the set:** never edit a scenario in place between runs being compared. Add new
   IDs instead. Reports record the scenario file's SHA-256.
+
+## L2 and L3: prepared runs
+
+Everything below is ready but has **not been run against a real model**. Reports now record
+`agent_mode`, `provider` (what llm-gateway reports), `agent_models` (from the runs' traces),
+`agent_prompt_versions` (`inv-v1+ver-v1` or `inv-v1+ver-v2`), `verifier_prompt_version`,
+`retrieval_downrank_tables` and the judge model, so two reports show what differed.
+
+**The two switches** (environment variables, read where the agent runs: the eval process
+for `make eval`, the worker for the stack):
+
+| Variable | Values | What changes |
+|----------|--------|--------------|
+| `AGENT_VERIFIER_PROMPT_VERSION` | `v1` (default), `v2` | L2. `agent/prompts/verifier_v2.yaml` differs from v1 in one place: rule 3 of the check prompt. v1 accepts a claim if a passage supports it; v2 accepts it only if one passage states it explicitly, including its specific value (fault category, delay band, amount or cap), and rejects support that needs inference across passages. The judge prompt and both reply formats are identical (`tests/test_eval_variants.py` checks this) |
+| `RETRIEVAL_DOWNRANK_TABLES` | `false` (default), `true` | L3. Hybrid search multiplies the fused score of RBI Annex rows (`RBI_2017_CIRCULAR:Annex-1` ... `Annex-8`) and whole-table chunks (`Table-1`, `Table-2`, `Table-I`, `Table-II`) by 0.5, so specific clauses and table rows rank above them. Table rows, notes and the Ombudsman Scheme's Annex are unchanged (`retrieval/hybrid.py`) |
+
+### 1. Free dry run on the stub
+
+Checks the whole path (graph, judge, report fields) without spending quota. The stub answers
+the agents from the scenarios (docs/load_test.md), so the scores say nothing about quality.
+
+```bash
+make ingest                                           # local index, once (no model calls)
+LLM_PROVIDER=stub docker compose up -d --wait         # gateway on the stub
+make eval ARGS="--agent-mode graph --prompt-version stub-dryrun --ids S01,S14 --judge-client gateway"
+```
+
+### 2. L3 retrieval check, free
+
+Retrieval alone, before and after, with no model:
+
+```bash
+make retrieval-eval
+RETRIEVAL_DOWNRANK_TABLES=true make retrieval-eval
+```
+
+### 3. Live runs (your quota)
+
+Start the stack with your own `.env` (`LLM_PROVIDER=gemini`), then run each variant with the
+same scenarios. The agent runs in the eval process, so its limits come from the shell; the
+values below fit 4 model calls per run at 4 requests per minute (docs/agents.md, "Limits").
+
+```bash
+SUBSET=S01,S04,S07,S09,S12,S14,S16,S17,S19,S22
+LIVE="AGENT_MAX_WALL_CLOCK_SECONDS=120 AGENT_MAX_TOOL_CALLS=40 LLM_REQUEST_DEADLINE_SECONDS=40"
+
+# Baseline: Verifier v1, retrieval unchanged. Serves as the L2 baseline AND the L3 "before".
+env $LIVE AGENT_VERIFIER_PROMPT_VERSION=v1 make eval ARGS="--agent-mode graph --confirm-live \
+  --prompt-version ver-v1 --ids $SUBSET --timeout 175 --judge-client gateway"
+
+# L2 variant: Verifier v2
+env $LIVE AGENT_VERIFIER_PROMPT_VERSION=v2 make eval ARGS="--agent-mode graph --confirm-live \
+  --prompt-version ver-v2 --ids $SUBSET --timeout 175 --judge-client gateway"
+
+# L3 after: retrieval down-ranking on, Verifier v1
+env $LIVE RETRIEVAL_DOWNRANK_TABLES=true make eval ARGS="--agent-mode graph --confirm-live \
+  --prompt-version l3-downrank --ids $SUBSET --timeout 175 --judge-client gateway"
+
+make eval-compare A=eval/reports/<ts>_ver-v1.json B=eval/reports/<ts>_ver-v2.json       # L2
+make eval-compare A=eval/reports/<ts>_ver-v1.json B=eval/reports/<ts>_l3-downrank.json  # L3
+```
+
+Run them on the same day and model if possible: model updates and the provider's own
+variation move scores too. Temperature is 0, but runs are not bit-for-bit repeatable.
+
+### Call budget
+
+Counted by driving every scenario through the graph on the stub (the happy path: two
+Investigator turns, and a Verifier pass only where no hard rule decides). A judged run costs
+2 + (citations) calls (D-027). A real model adds a third Investigator turn or a retry now
+and then: allow 10 to 20% more agent calls.
+
+| Run | Agent calls | Judge calls | Total | At 4 per minute |
+|-----|------------:|------------:|------:|----------------:|
+| All 24 scenarios, one variant | 78 (15 x 4 + 9 x 2) | 106 | 184, about 200 with a real model | about 50 min |
+| L2 (v1 and v2) + L3 after, all 24 | 3 x 78 | 3 x 106 | about 600 | about 2.5 h |
+| The 10-scenario subset above, one variant | 32 | 47 | 79, about 85 | about 22 min |
+| Subset, 3 runs (L2 and L3) | 96 | 141 | about 255 | about 1 h 10 min |
+
+Budget-friendly plan:
+
+1. **Reuse the baseline**: one v1 run is both the L2 baseline and the L3 "before" (3 runs,
+   not 4).
+2. **Use the 10-scenario subset**: it keeps every category (clear-cut, route coverage,
+   negligence, chargeback, contested fault, boundary, out of scope, adversarial).
+3. **Do the free checks first**: the stub dry run and `make retrieval-eval` before and
+   after catch mistakes without quota.
+4. **One run per day if the daily quota is small**: about 85 calls each. Check the model's
+   requests-per-day limit in Google AI Studio; per-minute limits only stretch the time.
+5. **Where L2 can show a difference**: v1 and v2 differ only in the Verifier's check call,
+   which runs for the cases no hard rule decides (the clear-cut ones). If quota is very
+   short, the L2 pair can use only S01, S04, S07, S09, S12, S22 (about 54 calls each).
+
+A second free provider would double the daily budget, but none is added: that needs a new
+provider in llm-gateway, and the scores would then mix two models.
 
 ## Quality over time (live runs)
 

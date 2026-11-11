@@ -14,6 +14,11 @@ class GatewaySettings(BaseSettings):
     llm_model: str | None = None
     llm_api_key: SecretStr | None = None
     stub_delay_ms: int = Field(default=1500, ge=0)
+    # Eval scenarios the stub answers agent calls from (llm_gateway/providers/stub.py).
+    stub_scenarios_path: str = "eval/scenarios.jsonl"
+    # The rate limiter's budget when LLM_PROVIDER=stub. LLM_MAX_REQUESTS_PER_MINUTE models the
+    # free tier's quota; a load test must measure this system, not that quota (docs/slo.md).
+    stub_max_requests_per_minute: float = Field(default=6000, gt=0)
     # USD per 1,000 tokens, used to compute LLMResponse.cost_usd at call time.
     llm_price_per_1k_prompt_tokens: float = Field(default=0, ge=0)
     llm_price_per_1k_completion_tokens: float = Field(default=0, ge=0)
@@ -54,6 +59,12 @@ class GatewaySettings(BaseSettings):
             if self.llm_api_key is None or not self.llm_api_key.get_secret_value().strip():
                 raise ValueError(f"LLM_API_KEY is required when LLM_PROVIDER={self.llm_provider}")
         return self
+
+    @property
+    def limiter_requests_per_minute(self) -> float:
+        """The rate limiter's budget: the stub's own, or the provider's quota."""
+        return self.stub_max_requests_per_minute if self.llm_provider == "stub" \
+            else self.llm_max_requests_per_minute
 
     @property
     def model_name(self) -> str:
