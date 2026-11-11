@@ -54,6 +54,9 @@ class GraphSettings(BaseSettings):
 
     # Times the Investigator may redraft after the Verifier finds unsupported claims.
     max_verify_retries: int = Field(default=1, ge=0)
+    # Verifier prompt file agent/prompts/verifier_<version>.yaml (L2 variants; v1 default).
+    verifier_prompt_version: str = Field(default=CURRENT_VERIFIER_PROMPT_VERSION,
+                                         pattern=r"^v\d+$")
 
 
 class GraphState(AgentState):
@@ -273,7 +276,8 @@ def run_graph(req: DisputeRequest, run_id: str, retriever: Retriever, llm: LLMCl
     trace: list[dict[str, Any]] = []
     ctx = RunContext(retriever=TracedRetriever(retriever, trace, state.max_tool_calls),
                      llm=TracedLLM(llm, trace), trace=trace,
-                     max_verify_retries=settings.max_verify_retries)
+                     max_verify_retries=settings.max_verify_retries,
+                     verifier_version=settings.verifier_prompt_version)
     # The step limit is enforced in the nodes; LangGraph's own limit is only a backstop.
     final = build_graph(ctx).invoke(state, {"recursion_limit": state.max_steps + 5})
     result: RunResult = final["result"]
