@@ -435,3 +435,77 @@ Where the corpus leaves the expected outcome open, the evaluation set records th
 - **Rejected:** scoring every run (doubles the model cost); judging inside the agent graph
   (adds latency to every dispute); pushing scores to Prometheus (a gauge per run is not a
   metric; the data is relational and lives with the runs it scores).
+
+## D-030 Worker metrics: prometheus_client multiprocess mode, one file set per container (rejected: per-pid files, Pushgateway, a non-forking worker, metrics from Postgres)
+
+- RQ forks a work horse per job and the horse exits with the job, so in-memory metrics die
+  with it. Multiprocess mode writes them to files in `PROMETHEUS_MULTIPROC_DIR` (a tmpfs) and
+  the worker's long-lived main process serves their sum on port 9100.
+- **One identity for all work horses:** the default names files after the pid, so every job
+  would leave a new set of files and every scrape would read more of them. A worker runs
+  one job at a time, so its horses can safely share the identity `job` and add to the same
+  files, which stay readable after the horse exits (`tests/test_observability.py` forks
+  three horses and checks the sum and the file names). The main process is `main`.
+- Prometheus finds every replica through Docker's DNS (`dns_sd_configs` on `worker`), so
+  `--scale worker=N` needs no configuration change.
+- **Rejected:** per-pid files (unbounded files under load); Pushgateway (built for batch
+  jobs: per-job pushes overwrite each other unless every job gets its own grouping key,
+  which brings back unbounded series); RQ's SimpleWorker (no fork, but a stuck agent thread
+  would then outlive its job; the worker relies on the horse exiting, D-004); computing
+  metrics from Postgres at scrape time (fine for counts, but histograms of node and call
+  latency would need a query over every run's trace on each scrape).
+
+## D-031 Tracing: OpenTelemetry to Jaeger over OTLP/HTTP, context carried in the RQ job (rejected: per-service traces joined by run_id, OTLP/gRPC, Zipkin)
+
+- One trace per run, rooted at `POST /disputes`: the API injects a W3C `traceparent` into the
+  job's `meta`, the worker continues it, copies it into the agent's thread, and the httpx
+  instrumentation sends it to llm-gateway. Every span carries `run_id`, `correlation_id` and
+  `step` (a span processor copies the first two from the structlog context).
+- The trace id is added to the run's `RunResult.trace` list as an `otel_trace` entry; no
+  contract change.
+- The gateway's service and provider are wrapped at startup (`llm_gateway/telemetry.py`)
+  rather than edited, so the resilience code stays as it is. The graph's nodes are wrapped
+  in `build_graph` (`agent/tracking.py: traced_node`); the node functions are unchanged.
+- The worker flushes spans at the end of each job: the horse exits with `os._exit`, which
+  would drop the batch.
+- Polling, health and metrics requests are not traced, so Jaeger shows runs, not noise.
+- **Rejected:** separate traces per service joined by `run_id` (Jaeger could not show the
+  run as one tree, and the gateway's latency could not be placed inside the node that
+  waited for it); OTLP/gRPC (pulls in grpcio, a large native dependency, for no gain at this
+  volume); Zipkin's format (Jaeger reads it, but OTLP is the standard and Jaeger's native
+  input).
+
+## D-032 Per-agent metrics are derived from the run's trace list, in the worker (rejected: counters inside the agents)
+
+- The trace list already records every node, tool call, model call and Verifier decision
+  with its latency (agent/tracking.py, agent/graph.py). The worker turns it into metrics
+  when the run ends (`worker/observability.py: record_trace`), so the metrics and the
+  stored trace cannot disagree, all three agent modes are covered, and the agents contain
+  no metrics code.
+- The spans come from the same wrappers that build the trace list.
+- **Rejected:** incrementing counters inside the Investigator and Verifier (more code in the
+  agents, a second record that can drift from the trace, and it would run in the agent's
+  thread inside the forked horse with the same multiprocess concerns).
+
+## D-033 Container resources from cAdvisor, configured for Docker Desktop (rejected: a docker-stats exporter of our own, node-exporter)
+
+- cAdvisor is the standard per-container exporter and needs no code. On Docker Desktop for
+  Mac it initially reported only the VM (`id="/"`): it needed the host cgroup namespace
+  (`cgroup: host`), the Docker and containerd sockets mounted explicitly, and v0.55.1
+  (v0.52.1 cannot read containers whose images are in containerd's store, Docker Desktop's
+  default). Details: [observability.md](observability.md#container-resources-cadvisor-on-docker-desktop).
+- It sees every container on the host, so the dashboard filters by compose project.
+- **Rejected:** a small exporter polling the Docker API's stats endpoint (more code to own,
+  and one request per container per scrape); node-exporter (host-level only, no
+  per-container numbers).
+
+## D-034 Observability UIs on localhost without login; Jaeger pinned to 2.20
+
+- Grafana allows anonymous Viewer access with Explore, and Grafana, Jaeger and Prometheus
+  publish their ports on 127.0.0.1 only. A demo needs no login and nothing is reachable from
+  the network. Grafana's host port defaults to 3300, not 3000, which local web dev servers
+  commonly use (`GRAFANA_HOST_PORT`).
+- Jaeger 2.20.0: 2.21 dropped the query API (`/api/services`, `/api/traces`) that Grafana
+  11.6's Jaeger data source and `make trace` call, keeping only `/api/v3`.
+- **Rejected:** Grafana with an admin password in `.env` (one more secret to manage for a
+  local tool); Jaeger 1.x all-in-one (end of life).

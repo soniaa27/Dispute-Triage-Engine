@@ -33,6 +33,7 @@ and recommends one of four routes, each backed by clause-level citations:
 - [Configuration](#configuration)
 - [Development](#development)
 - [Evaluation](#evaluation)
+- [Observability](#observability)
 - [Project structure](#project-structure)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -313,6 +314,23 @@ make eval ARGS="--ids S01,S04,S14 --judge-client gateway"   # adds LLM-judged me
 
 Running the evaluation against a real provider makes model calls; check your quota first.
 
+## Observability
+
+Tracing, metrics and dashboards start with the stack (`docker compose up`); no account or
+key is needed. Details: [docs/observability.md](docs/observability.md).
+
+| Tool | URL | Use |
+|------|-----|-----|
+| Grafana | http://localhost:3300 | Dashboard *Dispute triage*: SLO latency, throughput, errors, availability, queue and workers, per-agent success, steps, tool calls and retries, gateway, CPU and memory per container |
+| Jaeger | http://localhost:16686 | One trace per run: API -> worker -> graph nodes -> tool and model calls -> gateway -> provider |
+| Prometheus | http://localhost:9090 | Raw metrics and scrape targets |
+
+```bash
+make trace RUN=<run_id>   # everything one run did: tool calls, queries, passages, prompt
+                          # versions, latency and cost per step, Verifier outcome, Jaeger link
+make observability-urls   # the three URLs
+```
+
 ## Project structure
 
 | Path | Contents |
@@ -348,6 +366,8 @@ Running the evaluation against a real provider makes model calls; check your quo
 - [Runbook](docs/runbook.md)
 - [Incident log](docs/incident_log.md)
 - [Corpus sources](corpus/README.md)
+- [Observability: traces, metrics, dashboard, run reconstruction](docs/observability.md)
+- [Service level objective](docs/slo.md)
 
 ## Contributing
 
