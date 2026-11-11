@@ -106,13 +106,15 @@ def graph_on_stub(monkeypatch, real_corpus):
     monkeypatch.setattr(run_eval_module, "gateway_provider", lambda: "stub")
 
 
-def test_run_eval_runs_the_graph_and_records_provenance(graph_on_stub, tmp_path):
+def test_run_eval_runs_the_graph_and_records_provenance(graph_on_stub, real_corpus, tmp_path):
     from eval.chunks import load_chunk_index
 
+    # The session's chunks, built from the PDFs: data/ is git-ignored and absent in CI.
+    chunks = load_chunk_index(real_corpus[0])
     chosen = [s for s in load_scenarios(DEFAULT_SCENARIOS) if s.id in ("S01", "S14")]
     report, json_path, md_path = run_eval(
         chosen, prompt_version="graph-stub", agent_mode="graph",
-        scenarios_file=DEFAULT_SCENARIOS, out_dir=tmp_path, chunks=load_chunk_index())
+        scenarios_file=DEFAULT_SCENARIOS, out_dir=tmp_path, chunks=chunks)
     meta = json.loads(json_path.read_text())["meta"]
     assert meta["agent_mode"] == "graph" and meta["provider"] == "stub"
     assert meta["agent_prompt_versions"] == ["inv-v1+ver-v1"]
