@@ -29,6 +29,7 @@ from llm_gateway.providers.base import Provider
 from llm_gateway.resilience import STATE_GAUGE, BreakerState, CircuitBreaker, RateLimiter
 from llm_gateway.service import CallOutcome, LLMService
 from llm_gateway.settings import GatewaySettings
+from llm_gateway.telemetry import instrument_gateway
 
 log = structlog.get_logger("llm_gateway")
 
@@ -82,6 +83,7 @@ def create_app(settings: GatewaySettings | None = None, *, redis: Redis | None =
 
     app = FastAPI(title="LLM Gateway", version="0.2.0")
     app.state.service = service
+    instrument_gateway(app)  # tracing (docs/observability.md)
     log.info("gateway_started", provider=settings.llm_provider, model=settings.model_name,
              max_requests_per_minute=settings.llm_max_requests_per_minute,
              fault_injection=settings.llm_fault_injection)

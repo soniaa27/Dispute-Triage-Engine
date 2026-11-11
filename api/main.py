@@ -34,9 +34,11 @@ from api.metrics import (
 )
 from api.middleware import CorrelationIdMiddleware
 from api.settings import ApiSettings
+from api.telemetry import setup_observability
 from common.db import Feedback, Quarantine, Run, init_db, make_engine, make_session_factory
 from common.logging import configure_logging
 from common.quality import summarize
+from common.tracing import job_meta
 from contracts import (
     DisputeAccepted,
     DisputeRequest,
@@ -119,6 +121,7 @@ def create_app(
     )
     app.add_middleware(CorrelationIdMiddleware)
     app.state.queue = queue
+    setup_observability(app)  # tracing and queue metrics (docs/observability.md)
 
     def quarantine(request: Request, raw: str, errors: list[dict[str, Any]]) -> int:
         with session_factory.begin() as session:
@@ -220,6 +223,7 @@ def create_app(
                 job_timeout=settings.run_timeout_seconds + RQ_TIMEOUT_GRACE_SECONDS,
                 result_ttl=3600,
                 failure_ttl=86400,
+                meta=job_meta(),  # trace context for the worker
             )
         except Exception as exc:
             with session_factory.begin() as session:

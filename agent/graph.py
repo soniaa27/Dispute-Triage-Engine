@@ -34,7 +34,7 @@ from agent.errors import LIMIT_REACHED, MODEL_UNAVAILABLE, ToolBudgetExceeded
 from agent.investigator import InvestigatorError, investigate
 from agent.llm_client import LLMGatewayError
 from agent.prompts import CURRENT_PROMPT_VERSION
-from agent.tracking import TracedLLM, TracedRetriever, ms_since
+from agent.tracking import TracedLLM, TracedRetriever, ms_since, traced_node
 from agent.verifier import CURRENT_VERIFIER_PROMPT_VERSION, VerifierError, verify_detailed
 from agent.verifier.citations import to_citation
 from contracts import Citation, DisputeRequest, Route, RunResult, RunStatus
@@ -252,10 +252,11 @@ def _finalize(ctx: RunContext) -> Callable[[GraphState], dict]:
 
 def build_graph(ctx: RunContext):
     graph = StateGraph(GraphState)
-    graph.add_node("investigate", _agent_node(ctx, "investigate",
-                                              lambda s: _investigate(ctx, s)))
-    graph.add_node("verify", _agent_node(ctx, "verify", lambda s: _verify(ctx, s)))
-    graph.add_node("finalize", _finalize(ctx))
+    graph.add_node("investigate", traced_node("investigate", _agent_node(
+        ctx, "investigate", lambda s: _investigate(ctx, s))))
+    graph.add_node("verify", traced_node("verify", _agent_node(
+        ctx, "verify", lambda s: _verify(ctx, s))))
+    graph.add_node("finalize", traced_node("finalize", _finalize(ctx)))
     graph.add_edge(START, "investigate")
     graph.add_conditional_edges("investigate", _after_investigate, ["verify", "finalize"])
     graph.add_conditional_edges("verify", _after_verify, ["investigate", "finalize"])

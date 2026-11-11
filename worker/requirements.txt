@@ -18,3 +18,11 @@ numpy==2.4.6
 pyyaml==6.0.3
 # Agent graph (agent/graph.py): Investigator -> Verifier with a bounded retry loop
 langgraph==1.2.18
+# ---------- Observability (docs/observability.md) ----------
+# Traces to Jaeger over OTLP/HTTP; the httpx instrumentation carries the trace to llm-gateway.
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1
+opentelemetry-instrumentation-httpx==0.66b1
+# Worker metrics (multiprocess mode: RQ forks a child per job)
+prometheus-client==0.21.1
