@@ -43,7 +43,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from contracts import Route, RunResult
+from contracts import DisputeRequest, Route, RunResult
 from contracts.llm import LLMClient, LLMUnavailableError
 from eval.chunks import ChunkIndex
 from eval.corpus import base_citation_id, missing_terms, text_in_document
@@ -245,10 +245,6 @@ LIABILITY POSITION: {position}
 """
 
 
-def _facts(scenario: Scenario) -> str:
-    return scenario.request.model_dump_json(indent=2)
-
-
 def _passages(result: RunResult) -> str:
     return "\n\n".join(f"[{c.doc_id}:{c.clause_id}] {c.text}" for c in result.citations)
 
@@ -275,6 +271,30 @@ def label_counts(reply: dict[str, Any]) -> tuple[int, int, int]:
     return supported, len(labels) - supported, len(labels)
 
 
+@dataclass
+class RunJudgement:
+    """The judge's raw counts for one run; score() and the live quality monitor sum them."""
+
+    supported: int = 0
+    unsupported: int = 0
+    claims: int = 0
+    relevance: list[float] | None = None
+    faithful: int = 0
+
+    @property
+    def groundedness(self) -> float | None:
+        return _ratio(self.supported, self.claims)
+
+    @property
+    def hallucination_rate(self) -> float | None:
+        return _ratio(self.unsupported, self.claims)
+
+    @property
+    def context_relevance(self) -> float | None:
+        values = self.relevance or []
+        return round(sum(values) / len(values), 4) if values else None
+
+
 class LLMJudge:
     """LLM-as-judge for the four L3 metrics, using any contracts.llm.LLMClient."""
 
@@ -289,6 +309,35 @@ class LLMJudge:
         self.models.add(response.model)
         return parse_json_reply(response.text)
 
+    def judge_run(self, request: DisputeRequest, result: RunResult) -> RunJudgement:
+        """Judge one result that has citations. Judge calls are recorded in llm_calls under
+        their own run id, "judge-<run_id>"."""
+        facts = request.model_dump_json(indent=2)
+        passages = _passages(result)
+        judge_run = f"judge-{result.run_id}"[:64]
+        out = RunJudgement(relevance=[])
+        answer = f"{result.liability_position or ''}\n{result.basis or ''}".strip()
+        if answer:
+            out.supported, out.unsupported, out.claims = label_counts(self._ask(
+                _CLAIMS_PROMPT.format(facts=facts, passages=passages, answer=answer),
+                "judge_claims", judge_run,
+            ))
+        for citation in result.citations:
+            reply = self._ask(
+                _RELEVANCE_PROMPT.format(facts=facts, passage=citation.text),
+                "judge_relevance", judge_run,
+            )
+            out.relevance.append(min(1.0, max(0.0, float(reply.get("relevance", 0)))))
+        reply = self._ask(
+            _FAITHFULNESS_PROMPT.format(
+                facts=facts, passages=passages, route=result.route,
+                position=result.liability_position,
+            ),
+            "judge_faithfulness", judge_run,
+        )
+        out.faithful = 1 if reply.get("faithful") is True else 0
+        return out
+
     def score(self, runs: list[ScenarioRun]) -> dict[str, Any]:
         supported = unsupported = claims = 0
         relevance: list[float] = []
@@ -297,30 +346,12 @@ class LLMJudge:
             result = run.result
             if result is None or not result.citations:
                 continue
-            facts, passages = _facts(run.scenario), _passages(result)
-            # Judge calls are recorded in llm_calls under their own run id.
-            judge_run = f"judge-{result.run_id}"[:64]
-            answer = f"{result.liability_position or ''}\n{result.basis or ''}".strip()
-            if answer:
-                s, u, t = label_counts(self._ask(
-                    _CLAIMS_PROMPT.format(facts=facts, passages=passages, answer=answer),
-                    "judge_claims", judge_run,
-                ))
-                supported, unsupported, claims = supported + s, unsupported + u, claims + t
-            for citation in result.citations:
-                reply = self._ask(
-                    _RELEVANCE_PROMPT.format(facts=facts, passage=citation.text),
-                    "judge_relevance", judge_run,
-                )
-                relevance.append(min(1.0, max(0.0, float(reply.get("relevance", 0)))))
-            reply = self._ask(
-                _FAITHFULNESS_PROMPT.format(
-                    facts=facts, passages=passages, route=result.route,
-                    position=result.liability_position,
-                ),
-                "judge_faithfulness", judge_run,
-            )
-            faithful.append(1 if reply.get("faithful") is True else 0)
+            judged = self.judge_run(run.scenario.request, result)
+            supported += judged.supported
+            unsupported += judged.unsupported
+            claims += judged.claims
+            relevance.extend(judged.relevance or [])
+            faithful.append(judged.faithful)
         return {
             "groundedness": _ratio(supported, claims),
             "context_relevance": (
