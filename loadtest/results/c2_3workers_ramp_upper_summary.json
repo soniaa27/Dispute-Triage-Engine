@@ -1,0 +1,1355 @@
+{
+  "pacing_seconds": 20.0,
+  "poll_seconds": 1.0,
+  "steps": [
+    {
+      "step": 1,
+      "users": 4,
+      "seconds": 240.0,
+      "offered_rate_per_s": 0.2,
+      "submitted": 49,
+      "statuses": {
+        "completed": 31,
+        "escalated": 18
+      },
+      "p50_s": 59.7,
+      "p95_s": 96.0,
+      "failed_share": 0.0,
+      "slo_met": false
+    },
+    {
+      "step": 2,
+      "users": 5,
+      "seconds": 240.0,
+      "offered_rate_per_s": 0.25,
+      "submitted": 59,
+      "statuses": {
+        "completed": 41,
+        "escalated": 18
+      },
+      "p50_s": 173.6,
+      "p95_s": 344.2,
+      "failed_share": 0.0,
+      "slo_met": false
+    },
+    {
+      "step": 3,
+      "users": 6,
+      "seconds": 240.0,
+      "offered_rate_per_s": 0.3,
+      "submitted": 78,
+      "statuses": {
+        "escalated": 33,
+        "completed": 45
+      },
+      "p50_s": 394.7,
+      "p95_s": 458.7,
+      "failed_share": 0.0,
+      "slo_met": false
+    }
+  ],
+  "runs": [
+    {
+      "stage": 0,
+      "scenario": "S04",
+      "run_id": "19e50b3d-c771-43b3-b763-6fcc262118ff",
+      "seconds": 26.59843629199895,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S01",
+      "run_id": "9d030162-8f93-4e99-834c-c7012eac124d",
+      "seconds": 26.577243667008588,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S02",
+      "run_id": "db46d415-9396-423d-8151-44c3ebd10472",
+      "seconds": 26.591951333990437,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S03",
+      "run_id": "5cb254da-d0fa-4e0a-a7b3-fa2d5bc3673f",
+      "seconds": 47.58192583400523,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S06",
+      "run_id": "d69f4757-7bc5-41e3-a030-b122569a34a7",
+      "seconds": 27.587458249996416,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S08",
+      "run_id": "295cf409-432e-4f26-a4db-f021440513ba",
+      "seconds": 48.406282708005165,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S05",
+      "run_id": "6333b7eb-7fdd-4192-8ddc-f1374d7ec6a6",
+      "seconds": 27.59756770900276,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S07",
+      "run_id": "7c1630c1-bd8e-43c4-bc7b-852fed2c0c02",
+      "seconds": 48.44107362499926,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S11",
+      "run_id": "544ae134-ec91-49dd-bbdb-65973d3357be",
+      "seconds": 28.39683891599998,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S12",
+      "run_id": "6a0aa28a-b501-42e2-897a-7c608d48c57d",
+      "seconds": 47.688174292008625,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S10",
+      "run_id": "4421a1c8-7d65-40de-8032-152c65af1892",
+      "seconds": 47.69388879199687,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S09",
+      "run_id": "d1a0ee1b-6a3a-41d5-84e7-7207d4dd8a2d",
+      "seconds": 47.68246741699113,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S16",
+      "run_id": "e12bc10b-5834-48fa-bb9b-2b12d7e33787",
+      "seconds": 38.62548445799621,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S14",
+      "run_id": "55414767-b224-4ddc-b0da-ec3dfd6a6fe1",
+      "seconds": 38.620334709004965,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S13",
+      "run_id": "d4187119-14a5-4db2-98d4-da7fd89ca950",
+      "seconds": 57.566204709000885,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S15",
+      "run_id": "72d2e7b6-4d40-4881-9e77-2e561eb9b21a",
+      "seconds": 38.585700791009,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S19",
+      "run_id": "b539190c-6fd5-433a-9e4e-ce4c81acb747",
+      "seconds": 37.545162666996475,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S20",
+      "run_id": "232e8870-f8e0-49e3-bb8e-d6f408eb7b1b",
+      "seconds": 37.55816287500784,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S18",
+      "run_id": "2beec047-e0c4-4a63-b680-f9786acc770e",
+      "seconds": 47.43597975000739,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S17",
+      "run_id": "bb2d3aed-b212-4971-9dcc-70871928ffa3",
+      "seconds": 47.49210737500107,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S21",
+      "run_id": "3f353563-cef6-4c5a-82a9-f1215cbbcea4",
+      "seconds": 27.431109166995157,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S24",
+      "run_id": "7cb224c4-9546-4500-ac01-f926b3246531",
+      "seconds": 52.22096750000492,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S23",
+      "run_id": "0dc7446d-79b0-4fe7-b3f9-1a6f070165a4",
+      "seconds": 52.197727540988126,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S22",
+      "run_id": "7988cf1b-0062-4089-b17f-3cf51859fe38",
+      "seconds": 52.148635459001525,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S04",
+      "run_id": "2232eafc-2e2a-41e9-852b-eb7fb7490cc6",
+      "seconds": 59.76564995800436,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S02",
+      "run_id": "255b27e9-7cd1-4027-8c06-aa8a6b9e577c",
+      "seconds": 59.739919166997424,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S01",
+      "run_id": "24299055-8655-4ceb-9257-5e114e603ddb",
+      "seconds": 86.57728924999537,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S03",
+      "run_id": "3b9e0929-6ec9-428d-98fe-689d29fd5290",
+      "seconds": 59.735670957990806,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S05",
+      "run_id": "a53929b8-8a85-49d0-875d-390f7ceabef0",
+      "seconds": 66.64685845900385,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S06",
+      "run_id": "b784e0e8-eb1e-4197-9bb7-f94c7294693c",
+      "seconds": 66.57332879200112,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S07",
+      "run_id": "cab8ebcf-1ab4-4849-89ba-a0b4cb0af3bd",
+      "seconds": 92.86112004199822,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S08",
+      "run_id": "f22d4a3d-2a91-404b-98af-e2596f096a21",
+      "seconds": 92.94483291699726,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S11",
+      "run_id": "d4e11a37-432c-4a71-85d2-b68f32fd2d28",
+      "seconds": 72.89976770800422,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S10",
+      "run_id": "b3cf2f35-13cd-4a66-87ca-25d2d8858988",
+      "seconds": 93.70463349999045,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S09",
+      "run_id": "a89c3431-bec9-4256-a49c-acbe0eb214ea",
+      "seconds": 93.87809545900382,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S12",
+      "run_id": "ec1c9b3b-465d-4466-9e30-81cfa2b2a736",
+      "seconds": 93.81180683300772,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S13",
+      "run_id": "3cb37c92-360b-4983-ac5d-b9b4abf82725",
+      "seconds": 87.74382195799262,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S15",
+      "run_id": "f2a99349-89fd-4de4-840c-cd2268bbac62",
+      "seconds": 87.57559058300103,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S14",
+      "run_id": "544b50a1-d9ba-447f-a41f-572df8d6609c",
+      "seconds": 87.68443724999088,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S16",
+      "run_id": "04ed1f2f-2ece-4a29-b46d-8f0bbdc11354",
+      "seconds": 102.51962770801038,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S19",
+      "run_id": "32d431e1-1d53-4796-87ee-ac307e55841a",
+      "seconds": 82.54428591601027,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S20",
+      "run_id": "d854d3ed-8c22-46c3-8dfa-8dfdb56c8311",
+      "seconds": 82.54328754199378,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S18",
+      "run_id": "6dbf391e-f765-46b7-8ca5-3c76a244e52e",
+      "seconds": 94.15751970899873,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S17",
+      "run_id": "40409541-8455-4aed-aa1c-acf7fc663f77",
+      "seconds": 94.08457812499546,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S21",
+      "run_id": "65654e93-33da-4cb9-a01f-c9880daf54b2",
+      "seconds": 74.13152958299906,
+      "status": "escalated"
+    },
+    {
+      "stage": 0,
+      "scenario": "S24",
+      "run_id": "36cad21f-83c5-47a2-9fa6-8e2c86cb81a3",
+      "seconds": 95.96922524999536,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S23",
+      "run_id": "82128904-762b-405a-9cc2-6289bb3c9413",
+      "seconds": 95.96980720899592,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S22",
+      "run_id": "570f426d-1670-4fee-808c-f5f99af03f09",
+      "seconds": 95.97870337498898,
+      "status": "completed"
+    },
+    {
+      "stage": 0,
+      "scenario": "S01",
+      "run_id": "f2c45287-b301-432e-be72-748f2203c1cd",
+      "seconds": 94.23802733399498,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S03",
+      "run_id": "c8e6276e-0f61-42d7-ae36-0e77abc2fd56",
+      "seconds": 94.24327320899465,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S04",
+      "run_id": "d6f34677-7477-4083-94d1-fea7bcd2dd15",
+      "seconds": 114.08009670799947,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S02",
+      "run_id": "1c36359b-b872-4fda-bffb-cfc814d8e15b",
+      "seconds": 95.36979804099246,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S05",
+      "run_id": "aa270c5f-b947-470b-a5f8-97719d7cb182",
+      "seconds": 113.97189625000465,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S07",
+      "run_id": "b337d999-319a-43cd-880e-10fc98c47f5a",
+      "seconds": 94.00413808299345,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S08",
+      "run_id": "7145ccc2-8969-43ef-b2f6-ff9ecb377d11",
+      "seconds": 113.88292200000433,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S09",
+      "run_id": "ba0c6cc9-be38-4c46-aafe-acbf72ec961b",
+      "seconds": 112.97966262498812,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S06",
+      "run_id": "b893faa9-43ba-4082-b772-d745c0ae2dfb",
+      "seconds": 113.89174416600144,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S10",
+      "run_id": "64a1d02a-0db7-4c1d-9a79-ec47aaac0e2d",
+      "seconds": 134.86125558399362,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S12",
+      "run_id": "0459a23e-3b74-4258-8f5e-44525f6c257f",
+      "seconds": 114.51776591599628,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S14",
+      "run_id": "59c66255-4e17-41ee-8745-c2b9b1e960dd",
+      "seconds": 114.97928395800409,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S13",
+      "run_id": "c9e5d88d-63ac-463c-b615-df2c4a7fb381",
+      "seconds": 105.90125208300014,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S11",
+      "run_id": "f3a0fb7c-58fa-475f-97e6-69c151b90bae",
+      "seconds": 132.43001791699498,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S15",
+      "run_id": "833fdb60-2add-46e2-877e-db50bbc984b6",
+      "seconds": 123.58966762501223,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S16",
+      "run_id": "a5902cd7-b2be-4e22-86e0-4284df7b0869",
+      "seconds": 103.74116637499537,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S17",
+      "run_id": "f4ba6240-f8b3-426d-9950-1b609d21ed2f",
+      "seconds": 113.15977716600173,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S19",
+      "run_id": "51cbf8c5-0ced-4691-92fd-c7f4a1545dbd",
+      "seconds": 113.10972112500167,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S18",
+      "run_id": "5fd00610-ac51-4a9c-9332-1af3f681d4af",
+      "seconds": 121.8209272499953,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S20",
+      "run_id": "921b0525-1cd6-45fb-a317-43a11897c3e9",
+      "seconds": 122.07669425000495,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S24",
+      "run_id": "be9e5919-40f4-4865-9559-9a254b6bba77",
+      "seconds": 111.15607325000747,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S21",
+      "run_id": "d0c0c08d-6594-446a-b969-5a7825298deb",
+      "seconds": 125.21821591600019,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S23",
+      "run_id": "03badb2e-4bd4-414e-85f7-5b825f935528",
+      "seconds": 125.14849220900214,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S22",
+      "run_id": "20f325fb-4f89-45f6-8aa3-1ef08ec94fb0",
+      "seconds": 125.15040212500026,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S01",
+      "run_id": "e4537d02-ea53-4f29-822a-997add249f44",
+      "seconds": 149.21011362499848,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S05",
+      "run_id": "d90c9072-7b54-418e-84af-e213aa3503eb",
+      "seconds": 128.9691375830007,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S02",
+      "run_id": "73cce0b8-bda7-453b-8e7b-c5942a6f4a77",
+      "seconds": 128.99797958300042,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S03",
+      "run_id": "16ad044f-9309-4a22-af7b-bd4888495485",
+      "seconds": 164.31894324999303,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S04",
+      "run_id": "0a97c0ae-c948-4c95-8bb3-f8211df84d0c",
+      "seconds": 164.53818604099797,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S06",
+      "run_id": "b257f184-c519-4ab7-8ad1-563717a885b2",
+      "seconds": 164.17386262500077,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S10",
+      "run_id": "2d5568f2-33ed-47be-ba7d-6b25d0f6a79a",
+      "seconds": 175.40795675000118,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S08",
+      "run_id": "52b78767-0a8e-4764-90c4-d0b4b1794511",
+      "seconds": 178.2715500829945,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S07",
+      "run_id": "33c93992-47d7-4f91-958b-0b6302e4429b",
+      "seconds": 178.30440766700485,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S09",
+      "run_id": "99f27df7-87ac-435d-a3c5-8b77f3223141",
+      "seconds": 203.9002112080052,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S11",
+      "run_id": "472fca56-fa49-4906-9cb5-b3692e0d8baa",
+      "seconds": 205.50839395800722,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S14",
+      "run_id": "ca389d6f-0d8b-4b30-a836-c8704e7c0523",
+      "seconds": 185.71525358399958,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S15",
+      "run_id": "067d3506-766d-4644-85da-bdc8688deec4",
+      "seconds": 173.6119929169945,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S13",
+      "run_id": "33d2c984-58e5-44fc-be57-074b178e5470",
+      "seconds": 196.00301045800734,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S12",
+      "run_id": "805410ca-7d9d-4468-9eb9-fee9ffbac812",
+      "seconds": 207.26085291699565,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S16",
+      "run_id": "46fff965-dbf5-4933-92e5-a0da09ad0f51",
+      "seconds": 198.24619370899745,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S20",
+      "run_id": "725ee129-1cfd-49f5-9c61-f3b214b81e24",
+      "seconds": 190.8447809999925,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S19",
+      "run_id": "73ef594d-6523-44ab-b6fc-7a3c60af401f",
+      "seconds": 192.27797987501253,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S18",
+      "run_id": "10a11282-f3ca-46b0-ad09-efa344d910b4",
+      "seconds": 198.47661391699512,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S17",
+      "run_id": "28721aba-c524-4ee4-905d-a1d11b50e439",
+      "seconds": 201.3421291669947,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S21",
+      "run_id": "57cdff42-b2fb-4ba5-9f00-386f45406aa1",
+      "seconds": 203.7903041249956,
+      "status": "escalated"
+    },
+    {
+      "stage": 1,
+      "scenario": "S01",
+      "run_id": "bb44e292-84ec-44cc-bd8f-2dd4094703e3",
+      "seconds": 232.960348624998,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S22",
+      "run_id": "472a868f-e2cc-4154-b37f-d8d087c56a61",
+      "seconds": 236.44383908400778,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S23",
+      "run_id": "535e47cc-512b-421f-9eb8-cb7d0a8ee9e6",
+      "seconds": 245.0672287500056,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S24",
+      "run_id": "7c9708e4-7c84-410e-878b-cde9ae800fd9",
+      "seconds": 271.6989172080066,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S02",
+      "run_id": "fe4906aa-a4e5-4498-a921-6fa1abb7a590",
+      "seconds": 277.1191701659991,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S03",
+      "run_id": "231c6910-381f-4ff0-94df-95ad04fead5c",
+      "seconds": 258.0955514170055,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S06",
+      "run_id": "2815fc83-6363-4be3-b4d3-c20f879280c6",
+      "seconds": 294.3819623330055,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S04",
+      "run_id": "637cf8f8-a1bc-4602-a9c0-9aebe22bdd5f",
+      "seconds": 286.1157914580108,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S05",
+      "run_id": "b225f70d-0fb6-4da0-abe7-8c1e3a57121e",
+      "seconds": 294.3272256249911,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S07",
+      "run_id": "ba635c72-8a11-4308-8fa4-4649198ab6f1",
+      "seconds": 321.4539258329896,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S11",
+      "run_id": "fc9999a8-e060-4818-8dc7-410b3f126563",
+      "seconds": 318.28370775000076,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S10",
+      "run_id": "be1f9aeb-1f87-4dcb-b6ac-a90b0e4e1c98",
+      "seconds": 318.20707458299876,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S09",
+      "run_id": "945ecde8-d439-42e2-9246-072cd05ff54d",
+      "seconds": 344.2008681669977,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S08",
+      "run_id": "08e340f0-6ce9-45c9-8ded-776488f499c2",
+      "seconds": 348.01724387500144,
+      "status": "completed"
+    },
+    {
+      "stage": 1,
+      "scenario": "S12",
+      "run_id": "90792f40-e573-4b48-afb5-a66500cabae2",
+      "seconds": 347.87885058399115,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S13",
+      "run_id": "a6ebac30-9372-4d9f-9ee4-72b7f01671ba",
+      "seconds": 333.5912291249988,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S14",
+      "run_id": "a1a096f6-4983-4c57-977f-161c478132fe",
+      "seconds": 337.4663200000068,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S16",
+      "run_id": "51975da9-63de-4dcb-87d0-32ce1f4295b1",
+      "seconds": 337.3131889579963,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S15",
+      "run_id": "5f33924e-bdb4-4669-9428-ac6aeeb0e751",
+      "seconds": 342.53395266699954,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S17",
+      "run_id": "6f961533-1ada-49bf-953d-b4f48442992b",
+      "seconds": 347.347270667,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S18",
+      "run_id": "fe5ce4f8-12f6-4efe-b430-5bece8a01496",
+      "seconds": 347.2908812090027,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S20",
+      "run_id": "9aece292-4102-4417-bd41-eeae6fe5f5d5",
+      "seconds": 331.52772162499605,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S19",
+      "run_id": "3418b819-824a-4e1d-adea-cc4dacc0757c",
+      "seconds": 336.8590657909954,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S21",
+      "run_id": "197e6603-3ec9-4c6f-bf87-3df72d66bd2b",
+      "seconds": 339.98700695899606,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S22",
+      "run_id": "264c2fa6-0948-4eaf-aac1-d5a876359b33",
+      "seconds": 345.2984038750001,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S23",
+      "run_id": "e10fc8ef-e47e-4ae4-81c3-a13e38db9f27",
+      "seconds": 354.6184959999955,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S24",
+      "run_id": "2e480497-0e29-4354-beb4-299c3fd0e1ff",
+      "seconds": 357.02773312501085,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S03",
+      "run_id": "811c4dfe-cd80-41d5-81ad-5cfc8212cd30",
+      "seconds": 342.78288933300064,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S06",
+      "run_id": "70820b95-7f94-417f-9a9c-c9d25b63661d",
+      "seconds": 354.4818779579946,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S01",
+      "run_id": "e93fd85d-5518-4722-a60b-dd31e7fbe0cd",
+      "seconds": 352.1982272079913,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S04",
+      "run_id": "7ce531c3-20d3-4583-9538-d8a8691050a9",
+      "seconds": 369.736428624994,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S02",
+      "run_id": "b49cae98-2dd5-4b24-9ece-d0fecf91acb9",
+      "seconds": 374.2478296249901,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S05",
+      "run_id": "6f3f3dcf-62e2-4e3c-9476-75f7e4a9ecda",
+      "seconds": 360.5906967080082,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S08",
+      "run_id": "5af5a2cf-aa29-4a42-983a-971d8dc9cd51",
+      "seconds": 359.6434572080034,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S09",
+      "run_id": "23d38f72-b93a-491c-8e6b-8d4071100bf1",
+      "seconds": 372.0763283749984,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S07",
+      "run_id": "a1ca7fbf-4950-495f-9e6d-b6fa561800b5",
+      "seconds": 368.9316082909936,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S10",
+      "run_id": "526b0434-0979-42b5-8833-dcd4daec25f1",
+      "seconds": 378.5560442079877,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S11",
+      "run_id": "834ac0e9-c9e4-4d02-adb1-4cbf0f399bc2",
+      "seconds": 386.6403072079993,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S12",
+      "run_id": "fc69c589-8bb6-4d22-8a1b-49bc0792c7d4",
+      "seconds": 389.6162867910025,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S18",
+      "run_id": "530f54bd-8b21-4609-b501-f437caad92c8",
+      "seconds": 368.1650655410049,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S15",
+      "run_id": "e9056c37-78d0-4b31-b07d-eae2a5f4656d",
+      "seconds": 376.5984848329972,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S14",
+      "run_id": "3e652030-b457-4412-b254-9f62c9c7ab94",
+      "seconds": 379.1820027500071,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S13",
+      "run_id": "ac5e3ea5-c590-4da5-8feb-e069d22af52d",
+      "seconds": 379.4186215410009,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S16",
+      "run_id": "e0fa6643-565b-40b0-ac1b-3966e6030d00",
+      "seconds": 386.5061239170027,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S17",
+      "run_id": "433459f5-a3e9-48b6-9ceb-fadaa4fd11b8",
+      "seconds": 388.4146402920014,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S19",
+      "run_id": "0ab8c454-32db-4326-b1e4-12cc1ea3af54",
+      "seconds": 369.41543799999636,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S20",
+      "run_id": "be8154ba-57d3-45c0-8093-c22d6daf6562",
+      "seconds": 374.7018855409988,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S22",
+      "run_id": "cbe8a82d-72a7-4b94-b21f-53ac606879a0",
+      "seconds": 385.05539570801193,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S23",
+      "run_id": "78f22bca-a44c-4883-9ae9-01a72c1533fe",
+      "seconds": 392.8679819999961,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S21",
+      "run_id": "33cdfc1b-112f-4222-8259-262d8d7f8e2a",
+      "seconds": 378.04863495800237,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S24",
+      "run_id": "e598107d-154e-47a1-ac93-254ff7d4c3b9",
+      "seconds": 394.74823033300345,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S01",
+      "run_id": "a00f54df-b110-4471-b11f-e0804a45c31f",
+      "seconds": 382.9470797499962,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S02",
+      "run_id": "ab501bc8-d07c-4b0f-b619-f40c9b84de96",
+      "seconds": 390.93767504200514,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S03",
+      "run_id": "7392b83c-5c1a-4370-ba2a-417558841028",
+      "seconds": 393.3279851249972,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S04",
+      "run_id": "04044a67-a7cb-47d4-8ad1-e13fcce19488",
+      "seconds": 400.86257299999124,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S05",
+      "run_id": "5be2617c-1118-4954-9cb6-43fb54087552",
+      "seconds": 409.62567220799974,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S06",
+      "run_id": "892d941f-9604-42d3-aa93-02d2fa9c9a2b",
+      "seconds": 411.18345274998865,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S08",
+      "run_id": "856580ea-0e8b-48c1-aecb-eff5537d6479",
+      "seconds": 398.65000999999756,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S07",
+      "run_id": "84ce7b17-e39d-417c-bf13-272ee37c7cfa",
+      "seconds": 408.8269897919963,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S09",
+      "run_id": "f0ef214e-6f03-4182-a28b-6262d8cb13ed",
+      "seconds": 407.69081624998944,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S10",
+      "run_id": "9f88c130-b5db-4f06-8480-7a385ece942a",
+      "seconds": 415.9113940829993,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S11",
+      "run_id": "0bca4e50-078b-4d34-ad32-6884dc58e7c2",
+      "seconds": 424.4968030000018,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S12",
+      "run_id": "45842494-2f43-4868-b99a-e918fc8b1938",
+      "seconds": 426.0760035419953,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S15",
+      "run_id": "5426dbb9-89e1-4d7d-9777-72468348a68e",
+      "seconds": 405.2128152910009,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S18",
+      "run_id": "388edf36-a8fc-41aa-8bab-e6cb6e68b1c1",
+      "seconds": 413.03284250000434,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S13",
+      "run_id": "fed56305-002e-4f1c-8ac0-8b63bac3053e",
+      "seconds": 414.4634162500006,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S14",
+      "run_id": "a5128c47-81fc-4ac1-a824-385d40770dba",
+      "seconds": 415.04480008300743,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S17",
+      "run_id": "eb7f8031-b345-44c4-8ef7-1c40433365c1",
+      "seconds": 422.41999308299273,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S16",
+      "run_id": "97144e0f-380f-49ae-99fe-53e8d892e5be",
+      "seconds": 423.0139155420038,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S19",
+      "run_id": "38f09cf8-3e7c-4a50-868e-682bde435548",
+      "seconds": 404.1439336659969,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S21",
+      "run_id": "4e12159f-3a3b-41a8-a977-cc0d6cc6061c",
+      "seconds": 412.0327904579899,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S20",
+      "run_id": "d33deef0-92e6-4c36-92f1-081c01f0e5e8",
+      "seconds": 413.312494791011,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S23",
+      "run_id": "cbec73cd-2e06-4ac8-938f-5887e1299aa9",
+      "seconds": 428.9883534170076,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S22",
+      "run_id": "55cc7f28-007f-497e-ac69-329f85d7850c",
+      "seconds": 422.36504224999226,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S24",
+      "run_id": "8d923761-7615-4070-97f5-596dd653c536",
+      "seconds": 430.23398158399505,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S04",
+      "run_id": "713ffdda-62b0-4f76-a70d-89344c37c815",
+      "seconds": 419.98381083399,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S02",
+      "run_id": "fb31f9fa-279c-464b-9022-31429a41c79e",
+      "seconds": 426.1494492089987,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S05",
+      "run_id": "8a62adfd-ed40-49f2-b9e8-d7f60aaeba29",
+      "seconds": 444.4350459589914,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S03",
+      "run_id": "4bb2720b-814e-4b59-bbb6-a0712579fbd2",
+      "seconds": 436.3331978750066,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S01",
+      "run_id": "563205bb-dc48-4186-b488-b7c25b406f47",
+      "seconds": 427.1143243749975,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S06",
+      "run_id": "4f1de070-bd5e-46c3-bf61-1dac738baaaf",
+      "seconds": 444.2853227919986,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S09",
+      "run_id": "12468368-ec67-4ce6-96a7-97df5d4117c9",
+      "seconds": 442.23253383299743,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S12",
+      "run_id": "3f98689a-8641-461a-bf36-36150f6cc93b",
+      "seconds": 451.36177945799136,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S07",
+      "run_id": "932766e8-1a7d-4bea-8ff4-de7cd8a53859",
+      "seconds": 434.8653376250004,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S08",
+      "run_id": "26440df3-f318-4eb4-977b-3f5917e842ef",
+      "seconds": 442.2045540830004,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S10",
+      "run_id": "71f954a5-bb8f-4237-939c-7012e78a3929",
+      "seconds": 460.0347142910032,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S11",
+      "run_id": "700556a9-fb09-43e8-9145-e9a3039c24d0",
+      "seconds": 459.9666047089995,
+      "status": "completed"
+    },
+    {
+      "stage": 2,
+      "scenario": "S14",
+      "run_id": "66c3aaf5-7c04-4f36-932b-ad6edf2ee68e",
+      "seconds": 440.09448329200677,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S16",
+      "run_id": "75056ce0-d866-41af-ba77-30a7b7a8c58d",
+      "seconds": 449.35448495800665,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S15",
+      "run_id": "bd05f2eb-6736-4db3-90e2-f0bda774510b",
+      "seconds": 449.3562089580082,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S13",
+      "run_id": "7b4625ca-6aea-4e64-ae29-d200334f6929",
+      "seconds": 449.35138691701286,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S17",
+      "run_id": "6a48825a-698d-49fc-84f1-1aafd9f33339",
+      "seconds": 458.82416158400883,
+      "status": "escalated"
+    },
+    {
+      "stage": 2,
+      "scenario": "S18",
+      "run_id": "bf427c23-0b08-40a3-99b5-2ec5b029fdfa",
+      "seconds": 458.6632446670119,
+      "status": "escalated"
+    }
+  ]
+}

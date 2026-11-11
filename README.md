@@ -34,6 +34,7 @@ and recommends one of four routes, each backed by clause-level citations:
 - [Development](#development)
 - [Evaluation](#evaluation)
 - [Observability](#observability)
+- [Load testing](#load-testing)
 - [Project structure](#project-structure)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
@@ -237,7 +238,7 @@ Run limits: `AGENT_MAX_STEPS`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_WALL_CLOCK_SEC
 
 | `LLM_PROVIDER` | Needs | Use |
 |----------------|-------|-----|
-| `stub` (default) | nothing | Fixed response after `STUB_DELAY_MS`; clean clones, CI, load tests |
+| `stub` (default) | nothing | Simulated replies after `STUB_DELAY_MS` (agent calls answered from the eval scenarios); clean clones, CI, load tests |
 | `gemini` | `LLM_MODEL` and `LLM_API_KEY` in your local `.env` | Google Gemini via `google-genai` |
 
 To use Gemini, set `LLM_PROVIDER=gemini` and `LLM_API_KEY` in your local `.env` (never commit
@@ -331,6 +332,20 @@ make trace RUN=<run_id>   # everything one run did: tool calls, queries, passage
 make observability-urls   # the three URLs
 ```
 
+## Load testing
+
+The target is declared in [docs/slo.md](docs/slo.md): p95 of at most 60 s from submission to
+final status at 0.1 submissions per second. Load tests run the real graph against the
+gateway's stub provider (4 s per model call), never a real model. Method and results:
+[docs/load_test.md](docs/load_test.md).
+
+```bash
+python3.11 -m venv ~/.venvs/locust && ~/.venvs/locust/bin/pip install -r loadtest/requirements.txt
+make loadtest-up WORKERS=1                     # stub, graph agent, 1 worker (refuses if not stub)
+make loadtest LOCUST=~/.venvs/locust/bin/locust NAME=slo STEPS=1:600 PACING=10
+python3 loadtest/prom_snapshot.py --start <unix> --end <unix>   # what each container did
+```
+
 ## Project structure
 
 | Path | Contents |
@@ -368,6 +383,7 @@ make observability-urls   # the three URLs
 - [Corpus sources](corpus/README.md)
 - [Observability: traces, metrics, dashboard, run reconstruction](docs/observability.md)
 - [Service level objective](docs/slo.md)
+- [Load test: method, results, bottleneck](docs/load_test.md)
 
 ## Contributing
 
