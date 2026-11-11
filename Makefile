@@ -89,3 +89,31 @@ observability-urls: ## where to open Grafana, Jaeger and Prometheus
 	@echo "Grafana     http://localhost:3300  (dashboard: Dispute triage)"
 	@echo "Jaeger      http://localhost:16686"
 	@echo "Prometheus  http://localhost:9090/targets"
+
+# ---------- Load testing (docs/load_test.md) ----------
+.PHONY: loadtest-up loadtest
+# Locust from `pip install -r loadtest/requirements.txt` (its own venv is best).
+LOCUST ?= locust
+NAME ?= run
+STEPS ?= 1:300
+PACING ?= 10
+STUB_DELAY_MS_LOAD ?= 4000
+# macOS: keep the machine awake for the whole test (an idle sleep stalls Docker's VM mid-run).
+KEEP_AWAKE ?= $(shell command -v caffeinate >/dev/null 2>&1 && echo caffeinate -i -s)
+
+loadtest-up: env ## stack for load tests: stub at 4 s per call (docs/slo.md), graph agent, WORKERS workers
+	LLM_PROVIDER=stub AGENT_MODE=graph STUB_DELAY_MS=$(STUB_DELAY_MS_LOAD) \
+		RATE_LIMIT_TRUST_CLIENT_ID=true \
+		docker compose up -d --build --wait --scale worker=$(WORKERS)
+	@test "$$(docker compose exec -T llm-gateway printenv LLM_PROVIDER)" = stub \
+		|| (echo "llm-gateway is not on the stub provider: stopping the workers"; \
+			docker compose stop worker; exit 1)
+
+loadtest: ## headless Locust against the loadtest-up stack: make loadtest NAME=a STEPS=1:600 PACING=10
+	@test "$$(docker compose exec -T llm-gateway printenv LLM_PROVIDER)" = stub \
+		|| (echo "refusing: llm-gateway is not on the stub provider"; exit 1)
+	@mkdir -p loadtest/results
+	LOAD_STEPS=$(STEPS) LOAD_PACING_SECONDS=$(PACING) \
+		LOAD_SUMMARY=loadtest/results/$(NAME)_summary.json \
+		$(KEEP_AWAKE) $(LOCUST) -f loadtest/locustfile.py --headless --host http://localhost:8000 \
+		--csv loadtest/results/$(NAME) --csv-full-history --only-summary
